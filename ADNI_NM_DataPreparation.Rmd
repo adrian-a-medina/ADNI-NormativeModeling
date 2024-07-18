@@ -1,0 +1,275 @@
+---
+title: "ADNI_Normative Modeling"
+author: "Adrian Medina"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    df_print: paged
+---
+
+# From Norms to Neuropathology: Exploring Neuroanatomical & Neuropsychiatric Variation in Alzheimer’s Disease Through Normative Modeling
+
+[**Analytic Background**]{.underline}**:\
+**Our study data were a subset derived from the Alzheimer's Disease Neuroimaging Initiative (ADNI) ADNI3 wave data bank. This was due to the harmonization of scanner sequence protocols across data collection sites that began during this wave. We only included subjects that had both structural MRI and PET (amyloid & tau) data collected, followed by QA of these data. This analysis leveraged a normative model developed by the Predictive Clinical Neuroscience Group at the Donders Institute and Radboud UMC, which aims to predict and stratify brain disorders on the basis of neuroimaging data. Specifically, we used 'BLR_lifespan_57K_82sites', which makes use of the Bayesian Linear Regression algorithm trained on \~57,000 subjects from 82 different collection sites, across the human lifespan.
+
+-   Please refer to the Group's [Normative Modeling Graphical User Interface (GUI)](https://pcnportal.dccn.nl/) for more information. For reference to the template Python code used to calculate the deviation scores, please look at the Group's [Braincharts GUI](https://pcntoolkit.readthedocs.io/en/latest/pages/apply_normative_models.html).
+
+Our analytic approach builds upon the foundational work established by [Verdi et al. (2023)](https://www.neurology.org/doi/10.1212/WNL.0000000000207298), who utilized normative modeling techniques to delineate neuroanatomical heterogeneity in Alzheimer's disease. We employed a similar methodological framework to extend these insights by integrating both structural MRI and PET amyloid and tau data. This integration allowed us to explore more deeply the neuroanatomical and neuropsychiatric underpinnings of Alzheimer's disease across different phenotypes within our ADNI subset.
+
+[**Limitations/Considerations**]{.underline}:
+
+-   Ideally, both adaptation and testing sets would be balanced by age, sex, and site (covariates) following something like a 60/40 or 70/30 split of healthy controls. **However**, given our limited sample size, we decided to keep all of our healthy control and patient data **isolated**.
+    -   *In our analysis*: The **adaptation set** is used to calibrate for site (**only** [healthy controls]{.underline}) while the **testing set** is used **exclusively** for [patient-phenotyped data]{.underline}.
+        -   Healthy control phenotypes include 'A-C-' (amyloid-tau *negative*, cognitive impairment *negative*) & 'A+C-' (amyloid-tau *positive*, cognitive impairment *negative*).
+        -   Patient-phenotypes include 'A+C+' (amyloid-tau *positive*, cognitive impairment *positive*) & 'A-C+' (amyloid-tau *negative*, cognitive impairment *positive*).
+-   As a consequence of simultaneous conditions, a smaller sample size & larger site numbers (59 sites), our group elected to utilize the MRI manufacturer (3 total) of the subject's imaging data to act as a pseudo 'site' variable thus giving more power to viably calibrate for potential 'site' influences.
+    -   '1' = 'GE'
+    -   '2' = 'Philips'
+    -   '3' = 'Siemens'
+
+## [Code Workflow]{.underline}
+
+1.  [Data Frame Initialization](#data-frame-initialization): Install/load packages needed to run any/all chunks in this code file, and load/merge dataset(s) with imaging &/or non-imaging variables of interest. The finalized, merged file is what will be used to create adaptation-testing sets in the next step.
+    -   *Note:* Some manual edits may be needed to match your imaging variables to the column headers listed in the normative model CSV template (listed in the [Normative Modeling GUI](https://pcnportal.dccn.nl/)).
+2.  [Covariate Distributions, Data Splitting, & Balance Verification](#covariate-distributions-data-splitting-balance-verification): Visualize distributions of the covariates of interest prior to splitting your dataset. Produce the adaptation and testing datasets needed to compute deviation scores of subject neuroimaging (structural MRI) data. Visualize the proportions of covariates of interest following the adaptation-testing split to verify balance between the two sets.
+    -   *Note:* Upon completion of this step, you are then able to run your sets through the normative model deviation scores computation via either the [Normative Modeling GUI](https://pcnportal.dccn.nl/) or [Braincharts GUI](https://pcntoolkit.readthedocs.io/en/latest/pages/apply_normative_models.html) (if you want to recreate the Python code yourself).
+3.  [Analytic Data Preparation](#analytic-data-preparation):
+
+### Data Frame Initialization {#data-frame-initialization}
+
+```{r Preliminary Setup, include=FALSE, message=FALSE, warning=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# Set CRAN repository for consistent package installation, ggseg for neuroimaging visualizations
+options(repos = c(
+  ggseg = 'https://ggseg.r-universe.dev',
+  CRAN = 'https://cloud.r-project.org'))
+
+# Install and load the pacman package for efficient package management
+if (!require(pacman)) install.packages("pacman")
+library(pacman)
+
+# Use p_load function to install (if necessary) and load packages
+p_load(dplyr, psych, tidyr, readr, stringr, matrixStats, ggseg, ggseg3d, ggsegExtra, ggsegDesterieux,
+       cowplot, data.table, e1071, ggplot2, plot.matrix, proxy, RPMG, 
+       gridExtra, patchwork, caret, tidyverse, fastDummies, sjPlot)
+
+# Read in foundational datasets
+NIDP_DX_Dem_NP <- read_csv("NIDP_DX_Dem_NP_MRI.csv") # Data set with clinical/non-imaging variables and MRI manufacturer information per subject assuming separate from FreeSurfer dataset
+ADNI_freesurfer <- read_csv("ADNI_lh_rh_thickness_subcort_volumes.csv") # Data set with FreeSurfer brain thickness values
+
+# Merging datasets on 'Subject_ID' with only ID values present in NIDP_DX_Dem_NP
+ADNI_274_Merged <- merge(NIDP_DX_Dem_NP, ADNI_freesurfer, by = "Subject_ID", all.x = TRUE)
+
+# Save the newly merged dataset as a CSV file
+write_csv(ADNI_274_Merged, "ADNI_274_Merged.csv")
+
+### Manual edits were done to this spreadsheet to only leave FreeSurfer values and balancing variables for data split
+### FreeSurfer variables were edited to match PCN template, see GUI for details
+### Covariates: 'age', 'sex', 'site'
+# Rename finalized, merged file to 'ADNI_274_Merged_Final.csv'
+ADNI_274_Merged_Final <- read_csv("ADNI_274_Merged_Final.csv") # This should be the spreadsheet that will be split into adaptation and testing sets for normative modeling
+
+```
+
+### Covariate Distributions, Data Splitting, & Balance Verification {#covariate-distributions-data-splitting-balance-verification}
+
+```{r Biomarker-Site Cross Tabulation Visualizations, message=FALSE, warning=FALSE}
+# Create a bar plot for MRI manufacturers with counts displayed
+ggplot(NIDP_DX_Dem_NP, aes(x = MRI_MANU)) +
+  geom_bar(stat = "count", fill = "skyblue", color = "black") +
+  geom_text(stat = "count", aes(label = ..count..), vjust = -0.5) +
+  labs(title = "Count of MRI Manufacturers", x = "MRI Manufacturer", y = "Count") +
+  theme_minimal()
+
+# Create separate bar plots for each manufacturer
+ggplot(NIDP_DX_Dem_NP, aes(x = MRI_MAKE, fill = MRI_MANU)) +
+  geom_bar(position = "dodge") +
+  geom_text(aes(label = ..count..), stat = "count", position = position_dodge(width = 0.9), vjust = -0.5) +
+  facet_wrap(~MRI_MANU, scales = "free_x") +
+  labs(title = "Counts of Each MRI Make Grouped by Manufacturer", x = "MRI Make", y = "Count") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))  # Rotate x-axis labels for better visibility
+
+# Counting subjects by BioMarkers within each site
+bio_markers_site_counts <- ADNI_274_Merged_Final %>%
+  group_by(site, BioMarkers) %>%
+  dplyr::summarise(Count = n(), .groups = 'drop')
+
+# Plot with Site on x-axis
+plot_site_x <- ggplot(bio_markers_site_counts, aes(x = site, y = Count, fill = BioMarkers)) +
+  geom_bar(stat = "identity", position = position_dodge()) +
+  geom_text(aes(label = Count), vjust = -0.5, position = position_dodge(width = 0.9)) +
+  labs(title = "Subject Counts by BioMarkers Across Sites",
+       x = "Site",
+       y = "Number of Subjects",
+       fill = "BioMarkers") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 0, hjust = 1))
+
+# Plot with BioMarkers on x-axis
+plot_biomarkers_x <- ggplot(bio_markers_site_counts, aes(x = BioMarkers, y = Count, fill = factor(site))) +
+  geom_bar(stat = "identity", position = position_dodge()) +  # Use position_dodge() for proper grouping
+  geom_text(aes(label = Count), vjust = -0.5, position = position_dodge(width = 0.9)) +  # Adjust text positioning
+  labs(title = "Subject Counts Across BioMarkers by Site",
+       x = "BioMarkers",
+       y = "Number of Subjects",
+       fill = "Site") +
+  scale_fill_brewer(palette = "Set1") +  # Using a qualitative palette for distinct sites
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 0, hjust = 1))  # Improve readability of x-axis labels
+
+
+# Optionally, print both plots to view them in the R environment
+print(plot_site_x)
+print(plot_biomarkers_x)
+
+```
+
+```{r Re-Creating Testing & Adaptation Datasets with Updated Site, message=FALSE, warning=FALSE}
+# Separate the data based on 'BioMarkers'
+adaptation_data <- ADNI_274_Merged_Final %>%
+  filter(BioMarkers %in% c("A-C-", "A+C-"))
+
+testing_data <- ADNI_274_Merged_Final %>%
+  filter(BioMarkers %in% c("A-C+", "A+C+"))
+
+# Save the adaptation and testing datasets as CSV files
+write_csv(adaptation_data, "ADNI_175_Adaptation.csv")
+write_csv(testing_data, "ADNI_99_Testing.csv")
+
+# After verifying that the grouping variable and covariates are balanced as desired (i.e., see the next chunk), you can now run them through the normative model computation via the GUI or recreate their code yourself!
+
+```
+
+```{r Creating Plots to Visualize Dataset Balance Across Split, message=FALSE, warning=FALSE}
+# Plotting the distribution of 'BioMarkers' in both datasets
+biomarker_distribution <- bind_rows(
+  mutate(adaptation_data, dataset = "Adaptation"),
+  mutate(testing_data, dataset = "Testing")
+) %>%
+  group_by(dataset, BioMarkers) %>%
+  dplyr::summarise(Count = n(), .groups = 'drop') %>%
+  group_by(dataset) %>%
+  mutate(Percentage = (Count / sum(Count)) * 100)
+
+ggplot(biomarker_distribution, aes(x = BioMarkers, y = Percentage, fill = dataset)) +
+  geom_bar(stat = "identity", position = position_dodge()) +
+  labs(title = "Distribution of Biomarker", x = "Biomarker", y = "Percentage (%)") +
+  theme_minimal()
+
+# Plotting the distribution of 'site' in both datasets
+site_distribution <- bind_rows(
+  mutate(adaptation_data, dataset = "Adaptation"),
+  mutate(testing_data, dataset = "Testing")
+) %>%
+  group_by(dataset, site) %>%
+  dplyr::summarise(Count = n(), .groups = 'drop') %>%
+  group_by(dataset) %>%
+  mutate(Percentage = (Count / sum(Count)) * 100)
+
+ggplot(site_distribution, aes(x = site, y = Percentage, fill = dataset)) +
+  geom_bar(stat = "identity", position = position_dodge()) +
+  labs(title = "Distribution of Site", x = "Site", y = "Percentage (%)") +
+  theme_minimal()
+
+# Plotting the distribution of 'sex' in both datasets
+sex_distribution <- bind_rows(
+  mutate(adaptation_data, dataset = "Adaptation"),
+  mutate(testing_data, dataset = "Testing")
+) %>%
+  group_by(dataset, sex) %>%
+  dplyr::summarise(Count = n(), .groups = 'drop') %>%
+  group_by(dataset) %>%
+  mutate(Percentage = (Count / sum(Count)) * 100)
+
+ggplot(sex_distribution, aes(x = sex, y = Percentage, fill = dataset)) +
+  geom_bar(stat = "identity", position = position_dodge()) +
+  labs(title = "Distribution of Sex", x = "Sex", y = "Percentage (%)") +
+  theme_minimal()
+
+# Calculating and comparing the average age
+age_summary <- bind_rows(
+  mutate(adaptation_data, dataset = "Adaptation"),
+  mutate(testing_data, dataset = "Testing")
+) %>%
+  group_by(dataset) %>%
+  dplyr::summarise(Average_Age = mean(age, na.rm = TRUE), .groups = 'drop')
+
+print(age_summary)
+
+```
+
+### Analytic Data Preparation {#analytic-data-preparation}
+
+```{r Recoding Analytic Variables, message=FALSE, warning=FALSE}
+# Read in computed deviation scores
+ADNI_deviation_scores <- read_csv("ADNI_deviation_scores.csv") # This dataset contains raw subject FreeSurfer volumetric measures and their respective deviation scores
+
+# Use dummy_cols to create dummy variables for the 'BioMarkers' column
+ADNI_deviation_scores <- dummy_cols(ADNI_deviation_scores, select_columns = "BioMarkers", remove_first_dummy = TRUE, remove_selected_columns = TRUE)
+
+# Rename data frame for efficient code modeling
+df <- ADNI_deviation_scores
+
+# Rename biomarker variable
+df <- dplyr::rename(df, biomarker = `BioMarkers_A+C+`)
+
+# Recode biomarker variable
+df$biomarker <- as.factor(df$biomarker)
+df$biomarker <- gsub("0", "MCI", df$biomarker)
+df$biomarker <- gsub("1", "AmyTau_MCI", df$biomarker)
+
+# Recode site variable
+df$site <- as.factor(df$site)
+
+# Recode sex variable, 0= females 1= males
+df$sex <- factor(df$sex)
+df$sex <- gsub("0", "Female", df$sex)
+df$sex <- gsub("1", "Male", df$sex)
+
+# Count of each variable of interest
+table(df$biomarker)
+table(df$sex)
+table(df$site)
+
+```
+
+```{r }
+
+```
+
+```{r Preparing the Destrieux Atlas ROI Variables, message=FALSE, warning=FALSE}
+# Read in Destrieux atlas data
+data("desterieux", package = "ggseg")  # make sure the atlas is loaded # Note: the ggseg package adds an extra 'e' in the spelling of the name, so it's NOT a typo
+
+# Assign atlas data to data frames in local environment
+desterieux_dims <- desterieux$data
+desterieux <- desterieux
+
+# Plot simple atlas features to test data frame with dimension data
+plot(desterieux_dims) +
+  theme(legend.position = "bottom",
+        legend.text = element_text(size = 7)) +
+  guides(fill = guide_legend(ncol = 3))
+
+# Plot atlas ROIs with labels to test data frame with complete vectors
+ggplot() +
+  geom_brain(atlas = desterieux)
+
+```
+
+```{r Descriptive Statistics by Variable, message=FALSE, warning=FALSE}
+# Cross-Tabulation of average thickness and biomarker group
+describeBy(df$Mean_Thickness, df$biomarker)
+d<-(describeBy(df$Mean_Thickness, df$biomarker))
+
+# Cross-Tabulation of age and biomarker group
+describeBy(df$age, df$biomarker)
+mean(df$age)
+sd(df$age)
+
+# Cross-Tabulation of sex & biomarker
+tapply(df$sex, df$biomarker, summary)
+
+```
