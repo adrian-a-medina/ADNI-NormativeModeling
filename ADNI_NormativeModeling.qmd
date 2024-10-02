@@ -3,7 +3,7 @@ title: "From Norms to Neuropsychopathology: Exploring Neuroanatomical & Neuropsy
 subtitle: "This study extends analyses conducted by <a href='https://www.neurology.org/doi/10.1212/WNL.0000000000207298'>Verdi et al. (2023)</a>, who utilized normative modeling techniques to delineate neuroanatomical heterogeneity in Alzheimer's disease. We employ a similar methodological framework to supplement these insights by integrating both structural MRI data and neuropsychiatric symptom profiles. This integration allowed us to explore more deeply the neuroanatomical and neuropsychiatric underpinnings of Alzheimer's disease across different phenotypes within our ADNI subset. This study was conducted by the <a href='https://www.mcleanmri.org/ansl.html'>Applied Neuroimaging Statistics Ressearch Laboratory</a> at McLean Hospital & Harvard Medical School."
 format:
   lumo-html: 
-    logo:                              # Optional. Path to a logo displayed above the title
+    logo: "logo.png"                             # Optional. Path to a logo displayed above the title
     github-repo: "https://www.github.com/adrian-a-medina/ADNI_NormativeModeling"
     primary-color: "#a31f37"
     self-contained: true
@@ -60,7 +60,7 @@ p_load(dplyr, knitr, kableExtra, psych, tidyr, readr, stringr, matrixStats, ggse
        lavaan, caTools, bitops, effects, ggeffects, reshape2, ggpubr)
 
 # Specify the 'base_path' where you can find your data files, ASSUMING they're in the same directory, & set it as WD
-base_path <- "~/Downloads/ADNI_NormativeModeling"
+base_path <- "~/GitHub/ADNI Normative Modeling/data_files"
 setwd(base_path)
 
 # Read in foundational datasets
@@ -78,6 +78,13 @@ write_csv(ADNI_274_Merged, "ADNI_274_Merged.csv")
 ### Covariates: 'age', 'sex', 'site'
 # Rename finalized, merged file to 'ADNI_274_Merged_Final.csv'
 ADNI_274_Merged_Final <- read_csv("ADNI_274_Merged_Final.csv") # This should be the spreadsheet that will be split into adaptation and testing sets for normative modeling
+
+# Read in computed deviation scores (the file you get back after uploading adaptation and testing sets)
+ADNI_deviation_scores <- read_csv("ADNI_deviation_scores_BLR.csv") # This dataset contains raw subject FreeSurfer volumetric measures and their respective deviation scores for your TESTING set used in the Normative Modeling
+
+# Read in PDC deviation data sets
+PDC_HBR <- read_csv("PDC_HBR.csv")
+PDC_BLR <- read_csv("PDC_BLR.csv")
 
 ```
 
@@ -233,7 +240,7 @@ ggplot() +
 
 ```{r Recoding & Reorganizing Analytic Variables for ONLY Group Cortical Thickness Comparisons, message=FALSE, warning=FALSE}
 # Rename data frame for efficient code modeling, using dataset with volumetric FreeSurfer measures for ALL subjects
-df_merged <- read_csv("ADNI_274_Merged_Final.csv") # to be used ONLY for group cortical thickness comparisons
+df_merged <- ADNI_274_Merged_Final # to be used ONLY for group cortical thickness comparisons
 
 # Rename biomarker variable
 df_merged <- dplyr::rename(df_merged, biomarker = "BioMarkers")
@@ -802,10 +809,6 @@ dev.off()
 ```
 
 ```{r BLR vs HBR Correlation}
-# Read in PDC data sets
-PDC_HBR <- read_csv("~/Downloads/ADNI_NormativeModeling/PDC_HBR.csv")
-PDC_BLR <- read_csv("~/Downloads/ADNI_NormativeModeling/PDC_BLR.csv")
-
 # Merge datasets on SubjectID
 merged_data <- inner_join(PDC_HBR, PDC_BLR, by = "SubjectID", suffix = c(".HBR", ".BLR"))
 
@@ -941,9 +944,6 @@ ggsave("correlation_significance_plot.png", width = 11, height = 8)
 # Z-Score Statistics Pipeline
 
 ```{r Recoding & Reorganizing Analytic Variables for All Other Analyses, message=FALSE, warning=FALSE}
-# Read in computed deviation scores
-ADNI_deviation_scores <- read_csv("ADNI_deviation_scores_BLR.csv") # This dataset contains raw subject FreeSurfer volumetric measures and their respective deviation scores for your TESTING set used in the Normative Modeling
-
 # Use dummy_cols to create dummy variables for the 'BioMarkers' column
 ADNI_deviation_scores <- dummy_cols(ADNI_deviation_scores, select_columns = "BioMarkers", remove_first_dummy = TRUE, remove_selected_columns = TRUE)
 
