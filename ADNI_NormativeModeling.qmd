@@ -219,12 +219,9 @@ print(age_summary)
 # Analytic Data Preparation {#analytic-data-preparation}
 
 ```{r Preparing the Destrieux Atlas ROI Variables, message=FALSE, warning=FALSE}
-# Read in Destrieux atlas data
-data("desterieux", package = "ggseg")  # Note: the ggseg package adds an extra 'e' in the spelling of the name Destrieux, so it's NOT a typo
-
 # Assign atlas data to data frames in local environment
 desterieux_dims <- desterieux$data
-desterieux <- desterieux
+desterieux <- desterieux  # Note: the ggseg package adds an extra 'e' in the spelling of the name Destrieux, so it's NOT a typo
 
 # Plot simple atlas features to test data frame with dimension data
 plot(desterieux_dims) +
@@ -291,21 +288,21 @@ table(df_merged$site)
 describeBy(df_merged$Mean_Thickness, df_merged$phenotype)
 d<-(describeBy(df_merged$Mean_Thickness, df_merged$phenotype))
 
-# Cross-Tabulation of age and biomarker group
-describeBy(df_merged$age, df_merged$biomarker)
+# Cross-Tabulation of age and phenotype group
+describeBy(df_merged$age, df_merged$phenotype)
 mean(df_merged$age)
 sd(df_merged$age)
 
 # Generate the violin plot of age stratified by phenotype categories
-ggplot(df_merged, aes(x = biomarker, y = age, fill = biomarker)) +
+ggplot(df_merged, aes(x = phenotype, y = age, fill = phenotype)) +
   geom_violin() +
   labs(title = "Distribution of Age Stratified by Phenotype Groups",
        x = "Phenotype Group", y = "Age") +
   theme_minimal() +
   theme(axis.text.x = element_text(angle = 0, hjust = 1))  # Improve readability of x-axis labels
 
-# Cross-Tabulation of sex & biomarker, visualization
-ggplot(df_merged, aes(x = biomarker, fill = sex)) +
+# Cross-Tabulation of sex & phenotype, visualization
+ggplot(df_merged, aes(x = phenotype, fill = sex)) +
   geom_bar(position = "dodge") +
   labs(title = "Distribution of Sex Across Phenotype Groups",
        x = "Phenotype Group",
@@ -315,7 +312,7 @@ ggplot(df_merged, aes(x = biomarker, fill = sex)) +
 
 # Create the summary Mean_Thickness data frame
 filtered_MT_summary <- df_merged %>%
-  group_by(biomarker) %>%
+  group_by(phenotype) %>%
   dplyr::summarise(
     score_mean = mean(Mean_Thickness, na.rm = TRUE),
     n = n(), # Sample size for each group
@@ -324,16 +321,16 @@ filtered_MT_summary <- df_merged %>%
   )
 
 # Create the rain cloud plot with separate components
-ggplot(df_merged, aes(x = biomarker, y = Mean_Thickness, fill = biomarker, color = biomarker)) +
+ggplot(df_merged, aes(x = phenotype, y = Mean_Thickness, fill = phenotype, color = phenotype)) +
   PupillometryR::geom_flat_violin(adjust = 1.5, trim = FALSE, alpha = 0.5, position = position_nudge(x = 0.2, y = 0), colour = NA) +
-  geom_point(aes(x = as.numeric(biomarker)-0.25, y = Mean_Thickness, colour = biomarker), position = position_jitter(width = .05), size = .5, shape = 20) +
+  geom_point(aes(x = as.numeric(phenotype)-0.25, y = Mean_Thickness, colour = phenotype), position = position_jitter(width = .05), size = .5, shape = 20) +
   geom_boxplot(outlier.shape = NA, alpha = 0.5, width = 0.25, position = position_dodge(width = 0.3), colour = "black") +
-  geom_point(data = filtered_MT_summary, aes(x = factor(biomarker), y = score_mean), shape = 18, position = position_nudge(x = 0.2)) +
-  geom_errorbar(data = filtered_MT_summary, aes(x = factor(biomarker), y = score_mean, ymin = score_mean - sem, ymax = score_mean + sem), width = 0.05, position = position_nudge(x = 0.2)) +
+  geom_point(data = filtered_MT_summary, aes(x = factor(phenotype), y = score_mean), shape = 18, position = position_nudge(x = 0.2)) +
+  geom_errorbar(data = filtered_MT_summary, aes(x = factor(phenotype), y = score_mean, ymin = score_mean - sem, ymax = score_mean + sem), width = 0.05, position = position_nudge(x = 0.2)) +
   labs(
     title = "Distribution of Mean Cortical Thickness Stratified by Phenotype Groups", 
     y = "Score", 
-    x = "Biomarker", 
+    x = "Phenotype", 
     fill = "Phenotype Group",  # Legend title for fill
     color = "Phenotype Group"  # Legend title for color
   ) +
@@ -346,16 +343,16 @@ ggplot(df_merged, aes(x = biomarker, y = Mean_Thickness, fill = biomarker, color
 ```
 
 ```{r Cortical Thickness Modeling, message=FALSE, warning=FALSE, results='asis'}
-# Fit a linear model of Mean_Thickness as a function of biomarker and store it in s_2
-s_2 <- lm(Mean_Thickness ~ biomarker, data = df_merged)
+# Fit a linear model of Mean_Thickness as a function of phenotype and store it in s_2
+s_2 <- lm(Mean_Thickness ~ phenotype, data = df_merged)
 
 # Create a table for the linear model with confidence intervals
-tab_model(s_2, title = "Linear Model: Average Cortical Thickness as a Function of Biomarker")
+tab_model(s_2, title = "Linear Model: Average Cortical Thickness as a Function of Phenotype")
 
 # Perform Tukey's Honest Significant Difference test and store results
-tukey_results_s2 <- TukeyHSD(aov(Mean_Thickness ~ biomarker, data = df_merged))
+tukey_results_s2 <- TukeyHSD(aov(Mean_Thickness ~ phenotype, data = df_merged))
 print(tukey_results_s2)
-tukey_data_s2 <- as.data.frame(tukey_results_s2$biomarker)
+tukey_data_s2 <- as.data.frame(tukey_results_s2$phenotype)
 tukey_data_s2$Comparison <- rownames(tukey_data_s2)
 tukey_data_s2$significant <- ifelse(tukey_data_s2$`p adj` < 0.05, "Significant", "Not Significant")
 
@@ -365,25 +362,25 @@ ggplot(tukey_data_s2, aes(y = Comparison, xmin = lwr, xmax = upr, x = diff)) +
   geom_errorbarh(aes(height = 0.2, color = significant)) +
   geom_point(aes(x = diff, color = significant), size = 2) +
   scale_color_manual(values = c("Significant" = "red", "Not Significant" = "blue")) +
-  labs(title = "Tukey HSD Test Results for Mean Cortical Thickness by Biomarker",
-       x = "Differences in Mean Levels of Biomarker",
+  labs(title = "Tukey HSD Test Results for Mean Cortical Thickness by Phenotype",
+       x = "Differences in Mean Levels of Phenotype",
        y = "Comparison",
        color = "P-value Significance") +
   theme_minimal()
 
-# Fit a linear model of Mean_Thickness as a function of biomarker with added covariates
-s_1<-lm(Mean_Thickness ~ biomarker + age + sex, data = df_merged)
+# Fit a linear model of Mean_Thickness as a function of phenotype with added covariates
+s_1<-lm(Mean_Thickness ~ phenotype + age + sex, data = df_merged)
 
 # Create a table for the linear model including covariates with confidence intervals
-tab_model(s_1, title = "Enhanced Linear Model: Average Cortical Thickness as a Function of Biomarker, Adjusted for Age and Sex")
+tab_model(s_1, title = "Enhanced Linear Model: Average Cortical Thickness as a Function of Phenotype, Adjusted for Age and Sex")
 
 # Plot multiple regression model
-ggpredict(s_1, c(terms = "age", "biomarker", "sex")) |>
+ggpredict(s_1, c(terms = "age", "phenotype", "sex")) |>
   plot() +
-  labs(title = "Average Cortical Thickness as a Function of Biomarker, Adjusted for Age and Sex",
+  labs(title = "Average Cortical Thickness as a Function of Phenotype, Adjusted for Age and Sex",
        x = "Age",
        y = "Mean Cortical Thickness (mm)",
-       caption = "Note: 'biomarker' factors, 'HC' = Healthy Control; 'MCI' = Mild Cognitive Impairment; & 'AD' = Alzheimer's Disease.")
+       caption = "Note: 'phenotype' factors, 'HC' = Healthy Control; 'MCI' = Mild Cognitive Impairment; & 'AD' = Alzheimer's Disease.")
 
 ```
 
@@ -393,8 +390,8 @@ ggpredict(s_1, c(terms = "age", "biomarker", "sex")) |>
 # Apply suffix to all ROI FreeSurfer measures
 df.rois <- df_merged %>% rename_at(vars((6:153)), ~ paste0(., '_rois'))
 
-# Run ANOVA analyses for each ROI across biomarker group and extract just the p-values
-df.stats <- as.data.frame(sapply(X = df.rois[,grep("_rois", names(df.rois),value = T)], FUN = function(x) summary(aov(x ~ df.rois$biomarker))[[1]][["Pr(>F)"]][1]))
+# Run ANOVA analyses for each ROI across phenotype group and extract just the p-values
+df.stats <- as.data.frame(sapply(X = df.rois[,grep("_rois", names(df.rois),value = T)], FUN = function(x) summary(aov(x ~ df.rois$phenotype))[[1]][["Pr(>F)"]][1]))
 
 # Rename columns in ANOVA output data frame
 names(df.stats) <- "p_value"
@@ -413,8 +410,8 @@ names(df.stats)[3] <- "FDR.pvalue"
 head(df.stats, 20)
 
 ### Repeat steps to now obtain the F-stat values
-# Run ANOVA analyses for each ROI across biomarker group and extract just the F-stat values
-df.f_stats <- as.data.frame(sapply(X = df.rois[,grep("_rois", names(df.rois),value = T)], FUN = function(x) summary(aov(x ~ df.rois$biomarker))[[1]][["F value"]][1]))
+# Run ANOVA analyses for each ROI across phenotype group and extract just the F-stat values
+df.f_stats <- as.data.frame(sapply(X = df.rois[,grep("_rois", names(df.rois),value = T)], FUN = function(x) summary(aov(x ~ df.rois$phenotype))[[1]][["F value"]][1]))
 
 # Rename columns in ANOVA output data frame
 names(df.f_stats) <- "f_stat"
@@ -580,15 +577,15 @@ cowplot::plot_grid(left_pvalues,right_pvalues, nrow = 2, labels = "AUTO")
 
 ```{r Pairwise Comparisons, message=FALSE, warning=FALSE}
 # Data frame preparation
-df.CA <- df_merged[grep("HC|AD", df_merged$biomarker), ] # Subset just Controls and Alzheimer's ("CA")
-df.CM <- df_merged[grep("HC|MCI", df_merged$biomarker), ] # Subset just Controls and MCI ("CM")
-df.MA <- df_merged[grep("MCI|AD", df_merged$biomarker), ] # Subset just MCI and Alzheimer's ("MA")
+df.CA <- df_merged[grep("HC|AD", df_merged$phenotype), ] # Subset just Controls and Alzheimer's ("CA")
+df.CM <- df_merged[grep("HC|MCI", df_merged$phenotype), ] # Subset just Controls and MCI ("CM")
+df.MA <- df_merged[grep("MCI|AD", df_merged$phenotype), ] # Subset just MCI and Alzheimer's ("MA")
 
 ### Control vs Alzheimer's t-test
 # Perform t-test and extract t-stat value, p-value, and parameters
-df.CA_stats <- as.data.frame(sapply(df.CA[6:153], function(x) t.test(x ~ df.CA$biomarker)$statistic))
-df.CA_stats1 <- as.data.frame(sapply(df.CA[6:153], function(x) t.test(x ~ df.CA$biomarker)$p.value))
-df.CA_stats2 <- as.data.frame(sapply(df.CA[6:153], function(x) t.test(x ~ df.CA$biomarker)$parameter))
+df.CA_stats <- as.data.frame(sapply(df.CA[6:153], function(x) t.test(x ~ df.CA$phenotype)$statistic))
+df.CA_stats1 <- as.data.frame(sapply(df.CA[6:153], function(x) t.test(x ~ df.CA$phenotype)$p.value))
+df.CA_stats2 <- as.data.frame(sapply(df.CA[6:153], function(x) t.test(x ~ df.CA$phenotype)$parameter))
 
 # Merge data frames and remove the subsequent, intermediate data frames
 df.CA_stats <- cbind(df.CA_stats, df.CA_stats1)
@@ -614,9 +611,9 @@ df.CA_stats_sig <- df.CA_stats[which(df.CA_stats$FDR.pvalue <0.05),]
 
 ### Control vs MCI t-test
 # Perform t-test and extract t-stat value, p-value, and parameters
-df.CM_stats <- as.data.frame(sapply(df.CM[6:153], function(x) t.test(x ~ df.CM$biomarker)$statistic))
-df.CM_stats1 <- as.data.frame(sapply(df.CM[6:153], function(x) t.test(x ~ df.CM$biomarker)$p.value))
-df.CM_stats2 <- as.data.frame(sapply(df.CM[6:153], function(x) t.test(x ~ df.CM$biomarker)$parameter))
+df.CM_stats <- as.data.frame(sapply(df.CM[6:153], function(x) t.test(x ~ df.CM$phenotype)$statistic))
+df.CM_stats1 <- as.data.frame(sapply(df.CM[6:153], function(x) t.test(x ~ df.CM$phenotype)$p.value))
+df.CM_stats2 <- as.data.frame(sapply(df.CM[6:153], function(x) t.test(x ~ df.CM$phenotype)$parameter))
 
 # Merge data frames and remove the subsequent, intermediate data frames
 df.CM_stats <- cbind(df.CM_stats, df.CM_stats1)
@@ -642,9 +639,9 @@ df.CM_stats_sig <- df.CM_stats[which(df.CM_stats$FDR.pvalue <0.05),]
 
 ### MCI vs Alzheimer's t-test
 # Perform t-test and extract t-stat value, p-value, and parameters
-df.MA_stats <- as.data.frame(sapply(df.MA[6:153], function(x) t.test(x ~ df.MA$biomarker)$statistic))
-df.MA_stats1 <- as.data.frame(sapply(df.MA[6:153], function(x) t.test(x ~ df.MA$biomarker)$p.value))
-df.MA_stats2 <- as.data.frame(sapply(df.MA[6:153], function(x) t.test(x ~ df.MA$biomarker)$parameter))
+df.MA_stats <- as.data.frame(sapply(df.MA[6:153], function(x) t.test(x ~ df.MA$phenotype)$statistic))
+df.MA_stats1 <- as.data.frame(sapply(df.MA[6:153], function(x) t.test(x ~ df.MA$phenotype)$p.value))
+df.MA_stats2 <- as.data.frame(sapply(df.MA[6:153], function(x) t.test(x ~ df.MA$phenotype)$parameter))
 
 # Merge data frames and remove the subsequent, intermediate data frames
 df.MA_stats <- cbind(df.MA_stats, df.MA_stats1)
@@ -698,7 +695,7 @@ ggplot(combined_stats_sig, aes(x = reorder(ROI, statistic), y = statistic, color
 ```
 
 ```{r Convert Pairwise Data to Destrieux Atlas Format, message=FALSE, warning=FALSE}
-### Rename ROIs to assign nomenclature consistent with the 'desterieux' atlas package
+### Rename ROIs to assign nomenclature consistent with the `desterieux` atlas package
 # Automated loop version
 rename_rois <- function(df, hemi, desterieux_dims) {
   # Filter based on hemisphere
@@ -931,10 +928,10 @@ df <- ADNI_deviation_scores
 df <- df[, -which(names(df) == "index")]
 
 # Rename biomarker variable
-df <- dplyr::rename(df, biomarker = `BioMarkers_A+C+`)
+df <- dplyr::rename(df, phenotype = `BioMarkers_A+C+`)
 
 # Specifying the order of the first few columns for easier viewing
-desired_order <- c("Subject_ID", "age", "sex", "site", "biomarker")
+desired_order <- c("Subject_ID", "age", "sex", "site", "phenotype")
 
 # Append the remaining column names that are not specified in desired_order
 remaining_cols <- setdiff(names(df), desired_order)
@@ -946,7 +943,7 @@ new_order <- c(desired_order, remaining_cols)
 df <- df[, new_order]
 
 # List of columns to exclude from the ROI list
-desired_order <- c("Subject_ID", "age", "sex", "site", "biomarker")
+desired_order <- c("Subject_ID", "age", "sex", "site", "phenotype")
 
 # Extract column names, remove those in desired_order, and remove z-score suffixes
 ROI <- names(df)[!names(df) %in% desired_order & !grepl("_Z_predict", names(df))]
@@ -954,11 +951,11 @@ ROI <- names(df)[!names(df) %in% desired_order & !grepl("_Z_predict", names(df))
 # Further clean the ROI names to ensure no duplicates from z-score names
 ROI <- unique(gsub("_Z_predict", "", ROI))
 
-# Recode biomarker variable
-df$biomarker <- as.factor(df$biomarker)
-df$biomarker <- gsub("0", "MCI", df$biomarker)
-df$biomarker <- gsub("1", "AD", df$biomarker)
-df$biomarker <- factor(df$biomarker, levels = c("MCI", "AD")) # explicitly set the reference level
+# Recode phenotype variable
+df$phenotype <- as.factor(df$phenotype)
+df$phenotype <- gsub("0", "MCI", df$phenotype)
+df$phenotype <- gsub("1", "AD", df$phenotype)
+df$phenotype <- factor(df$phenotype, levels = c("MCI", "AD")) # explicitly set the reference level
 
 # Recode site variable
 df$site <- as.factor(df$site)
@@ -993,15 +990,15 @@ df <- cbind(df, df3)
 rm(df3)
 
 # Create the box plot with colored outlines and filled points
-ggplot(df, aes(x = biomarker, y = total_outlier_score, color = biomarker, fill = biomarker)) +
+ggplot(df, aes(x = phenotype, y = total_outlier_score, color = phenotype, fill = phenotype)) +
   geom_boxplot(outlier.shape = NA, fill = NA, size = 1) +  # Draw box plots with no fill, only outlines
   geom_jitter(width = 0.2, size = 2, shape = 21) +  # Add jittered points with the same color
-  labs(x = "Biomarker", y = "Total Outlier Score") +
+  labs(x = "Phenotype", y = "Total Outlier Score") +
   theme_minimal() +
   theme(legend.position = "right")
 
-# Calculate descriptives of total outlier score grouped by biomarker group
-describeBy(df$total_outlier_score, df$biomarker, IQR = T)
+# Calculate descriptives of total outlier score grouped by phenotype group
+describeBy(df$total_outlier_score, df$phenotype, IQR = T)
 
 # Basic regression analysis with phenoype as predictor and total outlier score as outcome
 summary(lm(total_outlier_score ~ phenotype, data = df))
