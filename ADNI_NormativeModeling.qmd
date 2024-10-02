@@ -3,11 +3,11 @@ title: "From Norms to Neuropsychopathology: Exploring Neuroanatomical & Neuropsy
 subtitle: "This study extends analyses conducted by <a href='https://www.neurology.org/doi/10.1212/WNL.0000000000207298'>Verdi et al. (2023)</a>, who utilized normative modeling techniques to delineate neuroanatomical heterogeneity in Alzheimer's disease. We employ a similar methodological framework to supplement these insights by integrating both structural MRI data and neuropsychiatric symptom profiles. This integration allowed us to explore more deeply the neuroanatomical and neuropsychiatric underpinnings of Alzheimer's disease across different phenotypes within our ADNI subset. This study was conducted by the <a href='https://www.mcleanmri.org/ansl.html'>Applied Neuroimaging Statistics Ressearch Laboratory</a> at McLean Hospital & Harvard Medical School."
 format:
   lumo-html: 
-    logo: "logo.png"                             # Optional. Path to a logo displayed above the title
+    logo: "logo.png"
     github-repo: "https://www.github.com/adrian-a-medina/ADNI_NormativeModeling"
     primary-color: "#a31f37"
     self-contained: true
-    is-particlejs-enabled: true                  # Optional: display interactive particles in the document header
+    is-particlejs-enabled: true
 author: Adrian Medina
 date: last-modified
 ---
@@ -23,8 +23,8 @@ date: last-modified
 
 -   Ideally, both adaptation and testing sets would be balanced by age, sex, and site (covariates) following something like a 60/40 or 70/30 split of healthy controls. **However**, given our limited sample size, we decided to keep all of our healthy control and patient data **isolated**.
     -   *In our analysis*: The **adaptation set** is used to calibrate for site (**only** [healthy controls]{.underline}) while the **testing set** is used **exclusively** for [patient-phenotyped data]{.underline}.
-        -   Healthy control phenotypes include 'A-C-' (amyloid-tau *negative*, cognitive impairment *negative*) & 'A+C-' (amyloid-tau *positive*, cognitive impairment *negative*).
-        -   Patient-phenotypes include 'A+C+' (amyloid-tau *positive*, cognitive impairment *positive*) & 'A-C+' (amyloid-tau *negative*, cognitive impairment *positive*).
+        -   Healthy control phenotypes include 'A-C-' (amyloid *negative*, cognitive impairment *negative*) & 'A+C-' (amyloid *positive*, cognitive impairment *negative*).
+        -   Patient-phenotypes include 'A+C+' (amyloid *positive*, cognitive impairment *positive*) & 'A-C+' (amyloid *negative*, cognitive impairment *positive*).
 -   As a consequence of simultaneous conditions, a smaller sample size & larger site numbers (59 sites), our group elected to utilize the MRI manufacturer (3 total) of the subject's imaging data to act as a pseudo 'site' variable thus giving more power to viably calibrate for potential 'site' influences.
     -   '1' = 'GE'
     -   '2' = 'Philips'
@@ -36,9 +36,9 @@ date: last-modified
     -   *Note:* Some manual edits may be needed to match your imaging variables to the column headers listed in the normative model CSV template (listed in the [Normative Modeling GUI](https://pcnportal.dccn.nl/)).
 2.  [Covariate Distributions, Data Splitting, & Balance Verification](#covariate-distributions-data-splitting-balance-verification): Visualize distributions of the covariates of interest prior to splitting your dataset. Produce the adaptation and testing datasets needed to compute deviation scores of subject neuroimaging (structural MRI) data. Visualize the proportions of covariates of interest following the adaptation-testing split to verify balance between the two sets.
     -   *Note:* Upon completion of this step, you are then able to run your sets through the normative model deviation scores computation via either the [Normative Modeling GUI](https://pcnportal.dccn.nl/) or [Braincharts GUI](https://pcntoolkit.readthedocs.io/en/latest/pages/apply_normative_models.html) (if you want to recreate the Python code yourself).
-3.  [Analytic Data Preparation](#analytic-data-preparation): Preparing analytical data for both group comparisons of cortical thickness and broader statistical analyses. Loading and cleaning study data from its CSV file, which includes renaming columns for clarity, re-coding categorical variables such as biomarkers and sites, and setting appropriate factor levels. For analyses excluding group cortical thickness comparisons, the procedure extends to managing deviation scores, generating dummy variables, eliminating unnecessary columns, and ensuring the data's integrity for modeling. Additionally, the Destrieux atlas data is loaded from the ggseg package, with preliminary visualizations executed to confirm the structure and detail of the data. This includes plotting atlas dimensions and displaying labeled regions to verify data accuracy. These meticulous preparations ensure the data is aptly formatted and enhanced, ready for subsequent in-depth statistical analysis and visualization tasks.
+3.  [Analytic Data Preparation](#analytic-data-preparation): Preparing analytical data for both group comparisons of cortical thickness and broader statistical analyses. Loading and cleaning study data from its CSV file, which includes renaming columns for clarity, re-coding categorical variables such as biomarkers and sites, and setting appropriate factor levels. For analyses excluding group cortical thickness comparisons, the procedure extends to managing deviation scores, generating dummy variables, eliminating unnecessary columns, and ensuring the data's integrity for modeling. Additionally, the Destrieux atlas data is loaded from the `ggseg` package, with preliminary visualizations executed to confirm the structure and detail of the data. This includes plotting atlas dimensions and displaying labeled regions to verify data accuracy. These meticulous preparations ensure the data is aptly formatted and enhanced, ready for subsequent in-depth statistical analysis and visualization tasks.
 4.  [Demographic Descriptives and Statistical Analysis of Cortical Thickness](#demographic-descriptives-and-statistical-analysis-of-cortical-thickness): Perform statistical analyses to understand the demographic distribution and cortical thickness variations across different biomarker groups. Calculate the counts for biomarkers, sex, and site categories and provides descriptive statistics for mean cortical thickness and age by biomarker group. Visualizations such as violin plots and bar charts are generated to display the distribution of age and sex across biomarker groups. Modeling cortical thickness variations, fitting linear models to predict mean cortical thickness based solely on biomarker groups and then incorporating additional covariates like age and sex. Detail the model outcomes with confidence intervals, performs Tukey HSD tests to scrutinize mean differences across groups, and visualizes these differences and their statistical significance. Visualize adjusted models' predictions to provide a comprehensive understanding of cortical thickness influences.
-5.  [Regional Analyses: Across-Groups & Pairwise Comparisons](#regional-analyses-across-groups-pairwise-comparisons): Apply the suffix '\_rois' to all ROI FreeSurfer measures in your dataframe, perform ANOVA analyses to extract p-values for each ROI across biomarker groups, and run FDR corrections. Further, derive F-stat values, merge and organize results for visualization, and display a heatmap of the significant F-stat values, annotated with significance levels. Remove the '\_rois' suffix from your ROI list and ensure that ROI names in your dataset match the Destrieux atlas nomenclature by extensively modifying and standardizing ROI names for both left and right hemispheres, then verifying and assigning corrected names in your dataframe. Visualize FDR-corrected p-values using ggseg for both left and right hemispheres, employing color gradients to represent significance levels, and save the combined plots as a PDF. Prepare data subsets for pairwise t-tests between different biomarker groups and perform these tests to extract statistical measures such as t-values, p-values, and FDR corrections, then visualize significant results using a lollipop plot to highlight the differences in brain regions across comparisons. Transform ROI names in your dataset to match the Destrieux atlas nomenclature by applying a function that renames based on hemisphere specifications and then ensures consistency with atlas data, using pattern replacements and validation against the atlas's region list. Visualize and compare the significant FDR-corrected p-values across different biomarker groups (Control vs. Alzheimer's, Control vs. MCI, and MCI vs. Alzheimer's) for both hemispheres using ggseg maps, adjust the color gradients to highlight significance levels, and then compile all plots into a PDF for detailed analysis.
+5.  [Regional Analyses: Across-Groups & Pairwise Comparisons](#regional-analyses-across-groups-pairwise-comparisons): Apply the suffix '\_rois' to all ROI FreeSurfer measures in your data frame, perform ANOVA analyses to extract p-values for each ROI across biomarker groups, and run FDR corrections. Further, derive F-stat values, merge and organize results for visualization, and display a heatmap of the significant F-stat values, annotated with significance levels. Remove the '\_rois' suffix from your ROI list and ensure that ROI names in your dataset match the Destrieux atlas nomenclature by extensively modifying and standardizing ROI names for both left and right hemispheres, then verifying and assigning corrected names in your data frame. Visualize FDR-corrected p-values using `ggseg` for both left and right hemispheres, employing color gradients to represent significance levels, and save the combined plots as a PDF. Prepare data subsets for pairwise t-tests between different biomarker groups and perform these tests to extract statistical measures such as t-values, p-values, and FDR corrections, then visualize significant results using a lollipop plot to highlight the differences in brain regions across comparisons. Transform ROI names in your dataset to match the Destrieux atlas nomenclature by applying a function that renames based on hemisphere specifications and then ensures consistency with atlas data, using pattern replacements and validation against the atlas's region list. Visualize and compare the significant FDR-corrected p-values across different biomarker groups (Control vs. Alzheimer's, Control vs. MCI, and MCI vs. Alzheimer's) for both hemispheres using `ggseg` maps, adjust the color gradients to highlight significance levels, and then compile all plots into a PDF for detailed analysis.
 6.  [Session Information](#session-information): To enhance **reproducibility**, details about the **working environment** used for these analyses can be found below.
 
 # Data Frame Initialization {#data-frame-initialization}
@@ -150,9 +150,9 @@ adaptation_data <- ADNI_274_Merged_Final %>%
 testing_data <- ADNI_274_Merged_Final %>%
   filter(BioMarkers %in% c("A-C+", "A+C+"))
 
-# Save the adaptation and testing datasets as CSV files
-write_csv(adaptation_data, "ADNI_175_Adaptation.csv")
-write_csv(testing_data, "ADNI_99_Testing.csv")
+# Save the adaptation and testing datasets as CSV files, un-comment when v
+# write_csv(adaptation_data, "ADNI_175_Adaptation.csv")
+# write_csv(testing_data, "ADNI_99_Testing.csv")
 
 # After verifying that the grouping variable and covariates are balanced as desired (i.e., see the next chunk), you can now run them through the normative model computation via the GUI or recreate their code yourself!
 
@@ -473,7 +473,6 @@ for (i in 1:nrow(group_positions)) {
 }
 
 print(heatmap_plot)
-ggsave("~/Downloads/ANOVA_heatmap.pdf")
 
 ```
 
@@ -576,8 +575,6 @@ left_pvalues <- left_pvalues + labs(title = "Between-Group Comparisons")
 right_pvalues <- right_pvalues + labs(title = "Between-Group Comparisons")
 
 cowplot::plot_grid(left_pvalues,right_pvalues, nrow = 2, labels = "AUTO")
-
-ggsave("~/Downloads/corticalthicknesspvalue_maps.pdf")
 
 ```
 
@@ -698,8 +695,6 @@ ggplot(combined_stats_sig, aes(x = reorder(ROI, statistic), y = statistic, color
     axis.text.x = element_text(angle = 90, hjust = 1, size = 7.5)  # Rotate x labels for better visibility
   )
 
-ggsave("~/Downloads/lollipop_plot.pdf")
-
 ```
 
 ```{r Convert Pairwise Data to Destrieux Atlas Format, message=FALSE, warning=FALSE}
@@ -793,18 +788,6 @@ right_MA_pvalues <- right_MA_pvalues + labs(title = "MCI Group vs Alzheimer's Gr
 cowplot::plot_grid(left_CA_pvalues, right_CA_pvalues, nrow = 2)
 cowplot::plot_grid(left_CM_pvalues, right_CM_pvalues, nrow = 2)
 cowplot::plot_grid(left_MA_pvalues, right_MA_pvalues, nrow = 2)
-
-### After verifying
-# Start the PDF device
-pdf("Pairwise Cortical Thickness p-Value Maps.pdf", width = 11, height = 8.5)
-
-# Lay out plots to be inserted and downloaded into a separate PDF file
-cowplot::plot_grid(left_CA_pvalues, right_CA_pvalues, nrow = 2)
-cowplot::plot_grid(left_CM_pvalues, right_CM_pvalues, nrow = 2)
-cowplot::plot_grid(left_MA_pvalues, right_MA_pvalues, nrow = 2)
-
-# Close the PDF device
-dev.off()
 
 ```
 
@@ -910,9 +893,6 @@ p <- ggplot(correlation_df, aes(x = Region, y = Correlation)) +
 # Print the plot
 print(p)
 
-# Optional: Save the plot as a PNG
-ggsave("correlation_plot.png", width = 11, height = 8)
-
 # Adding a new column for significance level based on p-values
 correlation_df$Significance <- ifelse(correlation_df$P_Value < 0.001, '***',
                                       ifelse(correlation_df$P_Value < 0.01, '**',
@@ -935,9 +915,6 @@ ggplot(correlation_df, aes(x = reorder(Region, Correlation), y = Correlation, co
         axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5, size = 5.5),  # Improve readability of x-axis labels
         legend.title = element_text(face = "bold")  # Bold the legend title for emphasis
     )
-
-# Optional: Save the plot as a PNG
-ggsave("correlation_significance_plot.png", width = 11, height = 8)
 
 ```
 
