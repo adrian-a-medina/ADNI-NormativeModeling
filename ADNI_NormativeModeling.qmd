@@ -3,7 +3,7 @@ title: "From Norms to Neuropsychopathology: Exploring Neuroanatomical & Neuropsy
 subtitle: "This study extends analyses conducted by <a href='https://www.neurology.org/doi/10.1212/WNL.0000000000207298'>Verdi et al. (2023)</a>, who utilized normative modeling techniques to delineate neuroanatomical heterogeneity in Alzheimer's disease. We employ a similar methodological framework to supplement these insights by integrating both structural MRI data and neuropsychiatric symptom profiles. This integration allowed us to explore more deeply the neuroanatomical and neuropsychiatric underpinnings of Alzheimer's disease across different phenotypes within our ADNI subset. This study was conducted by the <a href='https://www.mcleanmri.org/ansl.html'>Applied Neuroimaging Statistics Ressearch Laboratory</a> at McLean Hospital & Harvard Medical School."
 format:
   lumo-html: 
-    logo: "logo.png"
+    logo: "Brain Logo.png"
     github-repo: "https://www.github.com/adrian-a-medina/ADNI_NormativeModeling"
     primary-color: "#a31f37"
     self-contained: true
@@ -36,9 +36,9 @@ date: last-modified
     -   *Note:* Some manual edits may be needed to match your imaging variables to the column headers listed in the normative model CSV template (listed in the [Normative Modeling GUI](https://pcnportal.dccn.nl/)).
 2.  [Covariate Distributions, Data Splitting, & Balance Verification](#covariate-distributions-data-splitting-balance-verification): Visualize distributions of the covariates of interest prior to splitting your dataset. Produce the adaptation and testing datasets needed to compute deviation scores of subject neuroimaging (structural MRI) data. Visualize the proportions of covariates of interest following the adaptation-testing split to verify balance between the two sets.
     -   *Note:* Upon completion of this step, you are then able to run your sets through the normative model deviation scores computation via either the [Normative Modeling GUI](https://pcnportal.dccn.nl/) or [Braincharts GUI](https://pcntoolkit.readthedocs.io/en/latest/pages/apply_normative_models.html) (if you want to recreate the Python code yourself).
-3.  [Analytic Data Preparation](#analytic-data-preparation): Preparing analytical data for both group comparisons of cortical thickness and broader statistical analyses. Loading and cleaning study data from its CSV file, which includes renaming columns for clarity, re-coding categorical variables such as biomarkers and sites, and setting appropriate factor levels. For analyses excluding group cortical thickness comparisons, the procedure extends to managing deviation scores, generating dummy variables, eliminating unnecessary columns, and ensuring the data's integrity for modeling. Additionally, the Destrieux atlas data is loaded from the `ggseg` package, with preliminary visualizations executed to confirm the structure and detail of the data. This includes plotting atlas dimensions and displaying labeled regions to verify data accuracy. These meticulous preparations ensure the data is aptly formatted and enhanced, ready for subsequent in-depth statistical analysis and visualization tasks.
-4.  [Demographic Descriptives and Statistical Analysis of Cortical Thickness](#demographic-descriptives-and-statistical-analysis-of-cortical-thickness): Perform statistical analyses to understand the demographic distribution and cortical thickness variations across different biomarker groups. Calculate the counts for biomarkers, sex, and site categories and provides descriptive statistics for mean cortical thickness and age by biomarker group. Visualizations such as violin plots and bar charts are generated to display the distribution of age and sex across biomarker groups. Modeling cortical thickness variations, fitting linear models to predict mean cortical thickness based solely on biomarker groups and then incorporating additional covariates like age and sex. Detail the model outcomes with confidence intervals, performs Tukey HSD tests to scrutinize mean differences across groups, and visualizes these differences and their statistical significance. Visualize adjusted models' predictions to provide a comprehensive understanding of cortical thickness influences.
-5.  [Regional Analyses: Across-Groups & Pairwise Comparisons](#regional-analyses-across-groups-pairwise-comparisons): Apply the suffix '\_rois' to all ROI FreeSurfer measures in your data frame, perform ANOVA analyses to extract p-values for each ROI across biomarker groups, and run FDR corrections. Further, derive F-stat values, merge and organize results for visualization, and display a heatmap of the significant F-stat values, annotated with significance levels. Remove the '\_rois' suffix from your ROI list and ensure that ROI names in your dataset match the Destrieux atlas nomenclature by extensively modifying and standardizing ROI names for both left and right hemispheres, then verifying and assigning corrected names in your data frame. Visualize FDR-corrected p-values using `ggseg` for both left and right hemispheres, employing color gradients to represent significance levels, and save the combined plots as a PDF. Prepare data subsets for pairwise t-tests between different biomarker groups and perform these tests to extract statistical measures such as t-values, p-values, and FDR corrections, then visualize significant results using a lollipop plot to highlight the differences in brain regions across comparisons. Transform ROI names in your dataset to match the Destrieux atlas nomenclature by applying a function that renames based on hemisphere specifications and then ensures consistency with atlas data, using pattern replacements and validation against the atlas's region list. Visualize and compare the significant FDR-corrected p-values across different biomarker groups (Control vs. Alzheimer's, Control vs. MCI, and MCI vs. Alzheimer's) for both hemispheres using `ggseg` maps, adjust the color gradients to highlight significance levels, and then compile all plots into a PDF for detailed analysis.
+3.  [Analytic Data Preparation](#analytic-data-preparation): Preparing analytical data for both group comparisons of cortical thickness and broader statistical analyses. Loading and cleaning study data from its CSV file, which includes renaming columns for clarity, re-coding categorical variables such as phenotypes and sites, and setting appropriate factor levels. For analyses excluding group cortical thickness comparisons, the procedure extends to managing deviation scores, generating dummy variables, eliminating unnecessary columns, and ensuring the data's integrity for modeling. Additionally, the Destrieux atlas data is loaded from the `ggseg` package, with preliminary visualizations executed to confirm the structure and detail of the data. This includes plotting atlas dimensions and displaying labeled regions to verify data accuracy. These meticulous preparations ensure the data is aptly formatted and enhanced, ready for subsequent in-depth statistical analysis and visualization tasks.
+4.  [Demographic Descriptives and Statistical Analysis of Cortical Thickness](#demographic-descriptives-and-statistical-analysis-of-cortical-thickness): Perform statistical analyses to understand the demographic distribution and cortical thickness variations across different phenotype groups. Calculate the counts for phenotypes, sex, and site categories and provides descriptive statistics for mean cortical thickness and age by phenotype group. Visualizations such as violin plots and bar charts are generated to display the distribution of age and sex across phenotype groups. Modeling cortical thickness variations, fitting linear models to predict mean cortical thickness based solely on phenotype groups and then incorporating additional covariates like age and sex. Detail the model outcomes with confidence intervals, performs Tukey HSD tests to scrutinize mean differences across groups, and visualizes these differences and their statistical significance. Visualize adjusted models' predictions to provide a comprehensive understanding of cortical thickness influences.
+5.  [Regional Analyses: Across-Groups & Pairwise Comparisons](#regional-analyses-across-groups-pairwise-comparisons): Apply the suffix '\_rois' to all ROI FreeSurfer measures in your data frame, perform ANOVA analyses to extract p-values for each ROI across phenotype groups, and run FDR corrections. Further, derive F-stat values, merge and organize results for visualization, and display a heatmap of the significant F-stat values, annotated with significance levels. Remove the '\_rois' suffix from your ROI list and ensure that ROI names in your dataset match the Destrieux atlas nomenclature by extensively modifying and standardizing ROI names for both left and right hemispheres, then verifying and assigning corrected names in your data frame. Visualize FDR-corrected p-values using `ggseg` for both left and right hemispheres, employing color gradients to represent significance levels, and save the combined plots as a PDF. Prepare data subsets for pairwise t-tests between different phenotype groups and perform these tests to extract statistical measures such as t-values, p-values, and FDR corrections, then visualize significant results using a lollipop plot to highlight the differences in brain regions across comparisons. Transform ROI names in your dataset to match the Destrieux atlas nomenclature by applying a function that renames based on hemisphere specifications and then ensures consistency with atlas data, using pattern replacements and validation against the atlas's region list. Visualize and compare the significant FDR-corrected p-values across different phenotype groups (Control vs. Alzheimer's, Control vs. MCI, and MCI vs. Alzheimer's) for both hemispheres using `ggseg` maps, adjust the color gradients to highlight significance levels, and then compile all plots into a PDF for detailed analysis.
 6.  [Session Information](#session-information): To enhance **reproducibility**, details about the **working environment** used for these analyses can be found below.
 
 # Data Frame Initialization {#data-frame-initialization}
@@ -90,7 +90,7 @@ PDC_BLR <- read_csv("PDC_BLR.csv")
 
 # Covariate Distributions, Data Splitting, & Balance Verification {#covariate-distributions-data-splitting-balance-verification}
 
-```{r Biomarker-Site Cross Tabulation Visualizations, message=FALSE, warning=FALSE}
+```{r phenotype-Site Cross Tabulation Visualizations, message=FALSE, warning=FALSE}
 # Create a bar plot for MRI manufacturers with counts displayed
 ggplot(NIDP_DX_Dem_NP, aes(x = MRI_MANU)) +
   geom_bar(stat = "count", fill = "skyblue", color = "black") +
@@ -242,11 +242,11 @@ ggplot() +
 # Rename data frame for efficient code modeling, using dataset with volumetric FreeSurfer measures for ALL subjects
 df_merged <- ADNI_274_Merged_Final # to be used ONLY for group cortical thickness comparisons
 
-# Rename biomarker variable
-df_merged <- dplyr::rename(df_merged, biomarker = "BioMarkers")
+# Rename phenotype variable
+df_merged <- dplyr::rename(df_merged, phenotype = "BioMarkers")
 
 # Specifying the order of the first few columns for easier viewing
-desired_order <- c("Subject_ID", "age", "sex", "site", "biomarker")
+desired_order <- c("Subject_ID", "age", "sex", "site", "phenotype")
 
 # Append the remaining column names that are not specified in desired_order
 remaining_cols <- setdiff(names(df_merged), desired_order)
@@ -257,14 +257,14 @@ new_order <- c(desired_order, remaining_cols)
 # Reorder the columns in df according to new_order
 df_merged <- df_merged[, new_order]
 
-# Recode biomarker variable
-df_merged$biomarker <- recode(df_merged$biomarker,
+# Recode phenotype variable
+df_merged$phenotype <- recode(df_merged$phenotype,
                               "A-C-" = "HC",
                               "A+C-" = "HC",
                               "A-C+" = "MCI",
                               "A+C+" = "AD")
-df_merged$biomarker <- as.factor(df_merged$biomarker)
-df_merged$biomarker <- factor(df_merged$biomarker, levels = c("HC", "MCI", "AD")) # explicitly set the reference level
+df_merged$phenotype <- as.factor(df_merged$phenotype)
+df_merged$phenotype <- factor(df_merged$phenotype, levels = c("HC", "MCI", "AD")) # explicitly set the reference level
 
 # Recode site variable
 df_merged$site <- as.factor(df_merged$site)
@@ -283,13 +283,13 @@ df_merged$sex <- gsub("1", "Male", df_merged$sex)
 
 ```{r Descriptive Statistics by Variable, message=FALSE, warning=FALSE}
 # Count of each variable of interest
-table(df_merged$biomarker)
+table(df_merged$phenotype)
 table(df_merged$sex)
 table(df_merged$site)
 
-# Cross-Tabulation of average thickness and biomarker group
-describeBy(df_merged$Mean_Thickness, df_merged$biomarker)
-d<-(describeBy(df_merged$Mean_Thickness, df_merged$biomarker))
+# Cross-Tabulation of average thickness and phenotype group
+describeBy(df_merged$Mean_Thickness, df_merged$phenotype)
+d<-(describeBy(df_merged$Mean_Thickness, df_merged$phenotype))
 
 # Cross-Tabulation of age and biomarker group
 describeBy(df_merged$age, df_merged$biomarker)
@@ -973,7 +973,7 @@ df$sex <- gsub("1", "Male", df$sex)
 
 ```
 
-```{r Binarize Outliers and Create Total Outlier Score Across Total ROIs, message=FALSE, warning=FALSE}
+```{r Binarize Outliers, Create Total Outlier Score Across Total ROIs, and Brief Analyses message=FALSE, warning=FALSE}
 # Establish outlier threshold
 outlier_threshold <- -1.96 # bottom 2.5%, as used in the Verdi et al., 2023 paper
 
@@ -1002,6 +1002,12 @@ ggplot(df, aes(x = biomarker, y = total_outlier_score, color = biomarker, fill =
 
 # Calculate descriptives of total outlier score grouped by biomarker group
 describeBy(df$total_outlier_score, df$biomarker, IQR = T)
+
+# Basic regression analysis with phenoype as predictor and total outlier score as outcome
+summary(lm(total_outlier_score ~ phenotype, data = df))
+s1<- lm(total_outlier_score ~ phenotype, data = df)
+confint(s1) # Provides CI
+# rm(s1)
 
 ```
 
