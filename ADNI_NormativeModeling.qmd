@@ -60,7 +60,7 @@ p_load(dplyr, knitr, kableExtra, psych, tidyr, readr, stringr, matrixStats, ggse
        lavaan, caTools, bitops, effects, ggeffects, reshape2, ggpubr)
 
 # Specify the 'base_path' where you can find your data files, ASSUMING they're in the same directory, & set it as WD
-base_path <- "~/GitHub/ADNI Normative Modeling/data_files"
+base_path <- "~/GitHub/ADNI_NormativeModeling/data_files"
 setwd(base_path)
 
 # Read in foundational datasets
