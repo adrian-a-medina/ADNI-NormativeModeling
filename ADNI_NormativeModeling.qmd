@@ -81,15 +81,20 @@ ADNI_274_Merged <- read_csv("ADNI_274_Merged.csv") # <1>
 
 ### FreeSurfer variables were edited manually to match PCN template # <2>
 ### Covariates: 'age', 'sex', 'site'
-# Read in finalized file
-ADNI_274_Merged_Final <- read_csv("ADNI_274_Merged_Final.csv") # <3>
+# Read in finalized file, to be used ONLY for group cortical thickness comparisons
+df_merged <- read_csv("ADNI_274_Merged_Final.csv") # <3>
 
 # Read in computed deviation scores (the file you get back after uploading adaptation and testing sets)
-ADNI_deviation_scores <- read_csv("ADNI_deviation_scores_BLR.csv") # <4>
+df <- read_csv("ADNI_deviation_scores_BLR.csv") # <4>
 
 # Read in PDC deviation data sets
 PDC_HBR <- read_csv("PDC_HBR.csv")
 PDC_BLR <- read_csv("PDC_BLR.csv")
+
+# Rename biomarker variable to phenotype
+ADNI_274_Merged <- dplyr::rename(ADNI_274_Merged, phenotype = "BioMarkers")
+df_merged <- dplyr::rename(df_merged, phenotype = "BioMarkers")
+df <- dplyr::rename(df, phenotype = "BioMarkers")
 
 ```
 
@@ -103,6 +108,8 @@ Load and prepare Destrieux atlas data for visualization and analysis. The data f
 The `ggseg` package adds an extra 'e' in the spelling of the name Destrieux, so it's NOT a typo.
 :::
 ```{r Preparing the Destrieux Atlas ROI Variables, message=FALSE, warning=FALSE}
+setwd(base_path)
+
 # Assign atlas data to data frames in local environment
 desterieux_dims <- desterieux$data
 desterieux <- desterieux
@@ -124,9 +131,6 @@ ggplot() +
 Visualize and analyze the distribution of MRI manufacturers and models within the dataset after renaming the biomarker variable to phenotype. Bar plots display counts of MRI manufacturers and models grouped by manufacturer, with additional cross-tabulation bar plots showing the number of subjects by phenotype across different sites.
 
 ```{r Phenotype-Site Cross Tabulation Visualizations, message=FALSE, warning=FALSE}
-# Rename biomarker variable to phenotype
-ADNI_274_Merged <- dplyr::rename(ADNI_274_Merged, phenotype = "BioMarkers")
-
 # Create a bar plot for MRI manufacturers with counts displayed
 ggplot(ADNI_274_Merged, aes(x = MRI_MANU)) +
   geom_bar(stat = "count", fill = "skyblue", color = "black") +
@@ -144,7 +148,7 @@ ggplot(ADNI_274_Merged, aes(x = MRI_MAKE, fill = MRI_MANU)) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))  # Rotate x-axis labels for better visibility
 
 # Counting subjects by phenotype within each site
-phenotype_site_counts <- ADNI_274_Merged_Final %>%
+phenotype_site_counts <- df_merged %>%
   group_by(site, phenotype) %>%
   dplyr::summarise(Count = n(), .groups = 'drop')
 
@@ -180,12 +184,12 @@ print(plot_phenotype_x)
 Create adaptation and testing datasets from the merged data based on specific biomarker criteria, setting aside the groups for separate analyses. The datasets are saved as CSV files, which will be used for further normative model computations after ensuring that the data are balanced in terms of covariates and grouping variables.
 
 ```{r Re-Creating Testing & Adaptation Datasets with Updated Site, message=FALSE, warning=FALSE}
-# Separate the data based on 'BioMarkers'
-adaptation_data <- ADNI_274_Merged_Final %>%
-  filter(BioMarkers %in% c("A-C-", "A+C-"))
+# Separate the data based on 'phenotype'
+adaptation_data <- df_merged %>%
+  filter(phenotype %in% c("A-C-", "A+C-"))
 
-testing_data <- ADNI_274_Merged_Final %>%
-  filter(BioMarkers %in% c("A-C+", "A+C+"))
+testing_data <- df_merged %>%
+  filter(phenotype %in% c("A-C+", "A+C+"))
 
 # Save the adaptation and testing datasets as CSV files, un-comment when verified
 # write_csv(adaptation_data, "ADNI_175_Adaptation.csv")
@@ -259,12 +263,6 @@ print(age_summary)
 # Analytic Data Preparation {#analytic-data-preparation}
 
 ```{r Recoding & Reorganizing Analytic Variables for ONLY Group Cortical Thickness Comparisons, message=FALSE, warning=FALSE}
-# Rename data frame for efficient code modeling, using dataset with volumetric FreeSurfer measures for ALL subjects
-df_merged <- ADNI_274_Merged_Final # to be used ONLY for group cortical thickness comparisons
-
-# Rename biomarker variable to phenotype
-df_merged <- dplyr::rename(df_merged, phenotype = "BioMarkers")
-
 # Specifying the order of the first few columns for easier viewing
 desired_order <- c("Subject_ID", "age", "sex", "site", "phenotype")
 
@@ -954,10 +952,10 @@ ggplot(correlation_df, aes(x = reorder(Region, Correlation), y = Correlation, co
 
 ```{r ADNI BLR vs PDC BLR ANOVA}
 # Rename SubjectID variable to Subject_ID
-ADNI_deviation_scores <- dplyr::rename(ADNI_deviation_scores, SubjectID = "Subject_ID")
+df <- dplyr::rename(df, SubjectID = "Subject_ID")
 
 # Merge datasets on SubjectID
-ADNI_PDC <- inner_join(ADNI_deviation_scores, PDC_BLR, by = "SubjectID")
+ADNI_PDC <- inner_join(df, PDC_BLR, by = "SubjectID")
 
 # List to store all ANOVA results
 all_anova_results <- list()
@@ -998,17 +996,11 @@ print(anova_df)
 # Z-Score Statistics Pipeline
 
 ```{r Recoding & Reorganizing Analytic Variables for All Other Analyses, message=FALSE, warning=FALSE}
-# Use dummy_cols to create dummy variables for the 'BioMarkers' column
-ADNI_deviation_scores <- dummy_cols(ADNI_deviation_scores, select_columns = "BioMarkers", remove_first_dummy = TRUE, remove_selected_columns = TRUE)
-
-# Rename data frame for efficient code modeling, this is the data frame that will be used for all other analyses EXCEPT group cortical thickness comparisons
-df <- ADNI_deviation_scores
+# Use dummy_cols to create dummy variables for the 'phenotype' column
+df <- dummy_cols(df, select_columns = "phenotype", remove_first_dummy = TRUE, remove_selected_columns = TRUE)
 
 # Omit the 'index' column from the data frame, unnecessary variable
 df <- df[, -which(names(df) == "index")]
-
-# Rename biomarker variable
-df <- dplyr::rename(df, phenotype = `BioMarkers_A+C+`)
 
 # Specifying the order of the first few columns for easier viewing
 desired_order <- c("Subject_ID", "age", "sex", "site", "phenotype")
