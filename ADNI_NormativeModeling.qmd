@@ -48,7 +48,8 @@ Upon completion of this step, you are then able to run your adaptation and testi
 3.  [Analytic Data Preparation](#analytic-data-preparation)
 4.  [Demographic Descriptives and Statistical Analysis of Cortical Thickness](#demographic-descriptives-and-statistical-analysis-of-cortical-thickness)
 5.  [Regional Analyses: Across-Groups & Pairwise Comparisons](#regional-analyses-across-groups-pairwise-comparisons)
-6.  [Session Information](#session-information)
+6.  [ADNI vs PDC Preliminary Analyses](#adni-pdc)
+7.  [Session Information](#session-information)
 
 # Data Frame Initialization {#data-frame-initialization}
 
@@ -81,7 +82,7 @@ ADNI_274_Merged <- read_csv("ADNI_274_Merged.csv") # <1>
 
 ### FreeSurfer variables were edited manually to match PCN template # <2>
 ### Covariates: 'age', 'sex', 'site'
-# Read in finalized file, to be used ONLY for group cortical thickness comparisons
+# Read in finalized file, to be used ONLY for group cortical thickness comparisons (not deviation score analyses)
 df_merged <- read_csv("ADNI_274_Merged_Final.csv") # <3>
 
 # Read in computed deviation scores (the file you get back after uploading adaptation and testing sets)
@@ -285,15 +286,15 @@ df_merged$phenotype <- as.factor(df_merged$phenotype)
 df_merged$phenotype <- factor(df_merged$phenotype, levels = c("HC", "MCI", "AD")) # explicitly set the reference level
 
 # Recode site variable
-df_merged$site <- as.factor(df_merged$site)
 df_merged$site <- gsub("1", "GE", df_merged$site)
 df_merged$site <- gsub("2", "Philips", df_merged$site)
 df_merged$site <- gsub("3", "Siemens", df_merged$site)
+df_merged$site <- as.factor(df_merged$site)
 
 # Recode sex variable, 0 = females 1 = males
-df_merged$sex <- factor(df_merged$sex)
 df_merged$sex <- gsub("0", "Female", df_merged$sex)
 df_merged$sex <- gsub("1", "Male", df_merged$sex)
+df_merged$sex <- factor(df_merged$sex)
 
 ```
 
@@ -809,6 +810,97 @@ cowplot::plot_grid(left_MA_pvalues, right_MA_pvalues, nrow = 2)
 
 ```
 
+# Z-Score Statistics Pipeline
+
+```{r Recoding & Reorganizing Analytic Variables for All Other Analyses, message=FALSE, warning=FALSE}
+# Use dummy_cols to create dummy variables for the 'phenotype' column
+df <- dummy_cols(df, select_columns = "phenotype", remove_first_dummy = TRUE, remove_selected_columns = TRUE)
+
+# Omit the 'index' column from the data frame, unnecessary variable
+df <- df[, -which(names(df) == "index")]
+
+# Specifying the order of the first few columns for easier viewing
+desired_order <- c("Subject_ID", "age", "sex", "site", "phenotype")
+
+# Append the remaining column names that are not specified in desired_order
+remaining_cols <- setdiff(names(df), desired_order)
+
+# Combine the specified order with the remaining columns
+new_order <- c(desired_order, remaining_cols)
+
+# Reorder the columns in df according to new_order
+df <- df[, new_order]
+
+# List of columns to exclude from the ROI list
+desired_order <- c("Subject_ID", "age", "sex", "site", "phenotype")
+
+# Extract column names, remove those in desired_order, and remove z-score suffixes
+ROI <- names(df)[!names(df) %in% desired_order & !grepl("_Z_predict", names(df))]
+
+# Further clean the ROI names to ensure no duplicates from z-score names
+ROI <- unique(gsub("_Z_predict", "", ROI))
+
+# Recode phenotype variable
+df$phenotype <- as.factor(df$phenotype)
+df$phenotype <- gsub("0", "MCI", df$phenotype)
+df$phenotype <- gsub("1", "AD", df$phenotype)
+df$phenotype <- factor(df$phenotype, levels = c("MCI", "AD")) # explicitly set the reference level
+
+# Recode site variable
+df$site <- as.factor(df$site)
+df$site <- gsub("1", "GE", df$site)
+df$site <- gsub("2", "Philips", df$site)
+df$site <- gsub("3", "Siemens", df$site)
+
+# Recode sex variable, 0= females 1= males
+df$sex <- factor(df$sex)
+df$sex <- gsub("0", "Female", df$sex)
+df$sex <- gsub("1", "Male", df$sex)
+
+```
+
+```{r Binarize Outliers, Create Total Outlier Score Across Total ROIs, and Brief Analyses, message=FALSE, warning=FALSE}
+# Establish outlier threshold
+outlier_threshold <- -1.96 # bottom 2.5%, as used in the Verdi et al., 2023 paper
+
+# Apply threshold to z-score data to create dummy columns
+df3 <- as.data.frame(ifelse(df[,6:153] < outlier_threshold,1,0))
+
+# Rename all binarized columns to have the suffix "_bin"
+df3 <- df3 %>% rename_all(paste0, "_bin")
+
+# Sum the dummy column values to create a total outlier score
+df$total_outlier_score <- rowSums(df3)
+
+# Merge the two data frames
+df <- cbind(df, df3)
+
+# Remove df3 from your R environment as it's no longer needed
+rm(df3)
+
+# Create a group difference box plot with colored outlines and filled points
+ggplot(df, aes(x = phenotype, y = total_outlier_score, color = phenotype, fill = phenotype)) +
+  geom_boxplot(outlier.shape = NA, fill = NA, size = 1) +  # Draw box plots with no fill, only outlines
+  geom_jitter(width = 0.2, size = 2, shape = 21) +  # Add jittered points with the same color
+  labs(x = "Phenotype", y = "Total Outlier Score") +
+  theme_minimal() +
+  scale_color_manual(values=c("MCI" ="mediumturquoise", "AD"="lightslateblue")) +  # Color outline by phenotype
+  scale_fill_manual(values=c("MCI" ="mediumturquoise", "AD"="lightslateblue")) +  # Fill points by phenotype
+  theme(legend.position = "right")
+
+# Calculate descriptives of total outlier score grouped by phenotype group
+describeBy(df$total_outlier_score, df$phenotype, IQR = T)
+
+# Basic regression analysis with phenoype as predictor and total outlier score as outcome
+summary(lm(total_outlier_score ~ phenotype, data = df))
+s1<- lm(total_outlier_score ~ phenotype, data = df)
+confint(s1) # Provides CI
+rm(s1)
+
+```
+
+# ADNI vs PDC Preliminary Analyses {#adni-pdc}
+
 ```{r BLR vs HBR Correlation}
 # Merge datasets on SubjectID
 merged_data <- inner_join(PDC_HBR, PDC_BLR, by = "SubjectID", suffix = c(".HBR", ".BLR"))
@@ -990,95 +1082,6 @@ anova_df$Adjusted_P_Value <- p.adjust(anova_df$P_Value, method = "fdr")
 
 # Print the results
 print(anova_df)
-
-```
-
-# Z-Score Statistics Pipeline
-
-```{r Recoding & Reorganizing Analytic Variables for All Other Analyses, message=FALSE, warning=FALSE}
-# Use dummy_cols to create dummy variables for the 'phenotype' column
-df <- dummy_cols(df, select_columns = "phenotype", remove_first_dummy = TRUE, remove_selected_columns = TRUE)
-
-# Omit the 'index' column from the data frame, unnecessary variable
-df <- df[, -which(names(df) == "index")]
-
-# Specifying the order of the first few columns for easier viewing
-desired_order <- c("Subject_ID", "age", "sex", "site", "phenotype")
-
-# Append the remaining column names that are not specified in desired_order
-remaining_cols <- setdiff(names(df), desired_order)
-
-# Combine the specified order with the remaining columns
-new_order <- c(desired_order, remaining_cols)
-
-# Reorder the columns in df according to new_order
-df <- df[, new_order]
-
-# List of columns to exclude from the ROI list
-desired_order <- c("Subject_ID", "age", "sex", "site", "phenotype")
-
-# Extract column names, remove those in desired_order, and remove z-score suffixes
-ROI <- names(df)[!names(df) %in% desired_order & !grepl("_Z_predict", names(df))]
-
-# Further clean the ROI names to ensure no duplicates from z-score names
-ROI <- unique(gsub("_Z_predict", "", ROI))
-
-# Recode phenotype variable
-df$phenotype <- as.factor(df$phenotype)
-df$phenotype <- gsub("0", "MCI", df$phenotype)
-df$phenotype <- gsub("1", "AD", df$phenotype)
-df$phenotype <- factor(df$phenotype, levels = c("MCI", "AD")) # explicitly set the reference level
-
-# Recode site variable
-df$site <- as.factor(df$site)
-df$site <- gsub("1", "GE", df$site)
-df$site <- gsub("2", "Philips", df$site)
-df$site <- gsub("3", "Siemens", df$site)
-
-# Recode sex variable, 0= females 1= males
-df$sex <- factor(df$sex)
-df$sex <- gsub("0", "Female", df$sex)
-df$sex <- gsub("1", "Male", df$sex)
-
-```
-
-```{r Binarize Outliers, Create Total Outlier Score Across Total ROIs, and Brief Analyses, message=FALSE, warning=FALSE}
-# Establish outlier threshold
-outlier_threshold <- -1.96 # bottom 2.5%, as used in the Verdi et al., 2023 paper
-
-# Apply threshold to z-score data to create dummy columns
-df3 <- as.data.frame(ifelse(df[,6:153] < outlier_threshold,1,0))
-
-# Rename all binarized columns to have the suffix "_bin"
-df3 <- df3 %>% rename_all(paste0, "_bin")
-
-# Sum the dummy column values to create a total outlier score
-df$total_outlier_score <- rowSums(df3)
-
-# Merge the two data frames
-df <- cbind(df, df3)
-
-# Remove df3 from your R environment as it's no longer needed
-rm(df3)
-
-# Create a group difference box plot with colored outlines and filled points
-ggplot(df, aes(x = phenotype, y = total_outlier_score, color = phenotype, fill = phenotype)) +
-  geom_boxplot(outlier.shape = NA, fill = NA, size = 1) +  # Draw box plots with no fill, only outlines
-  geom_jitter(width = 0.2, size = 2, shape = 21) +  # Add jittered points with the same color
-  labs(x = "Phenotype", y = "Total Outlier Score") +
-  theme_minimal() +
-  scale_color_manual(values=c("MCI" ="mediumturquoise", "AD"="lightslateblue")) +  # Color outline by phenotype
-  scale_fill_manual(values=c("MCI" ="mediumturquoise", "AD"="lightslateblue")) +  # Fill points by phenotype
-  theme(legend.position = "right")
-
-# Calculate descriptives of total outlier score grouped by phenotype group
-describeBy(df$total_outlier_score, df$phenotype, IQR = T)
-
-# Basic regression analysis with phenoype as predictor and total outlier score as outcome
-summary(lm(total_outlier_score ~ phenotype, data = df))
-s1<- lm(total_outlier_score ~ phenotype, data = df)
-confint(s1) # Provides CI
-rm(s1)
 
 ```
 
