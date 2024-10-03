@@ -8,10 +8,7 @@ format:
     primary-color: "#a31f37"
     self-contained: true
     is-particlejs-enabled: true
-number-sections: true
-theme:
-  dark: darkly
-  light: flatly
+    code-summary: "Expand Code"
 author: Adrián Medina
 date: last-modified
 ---
@@ -20,31 +17,37 @@ date: last-modified
 ***
 [**Analytic Background**]{.underline}**:\
 **Our study data were a subset derived from the Alzheimer's Disease Neuroimaging Initiative (ADNI) ADNI3 wave data bank. This was due to the harmonization of scanner sequence protocols across data collection sites that began during this wave. We only included subjects that had both structural MRI and PET (amyloid) data collected, followed by QA of these data. This analysis leveraged a normative model developed by the Predictive Clinical Neuroscience Group at the Donders Institute and Radboud UMC, which aims to predict and stratify brain disorders on the basis of neuroimaging data. Specifically, we used 'HBR_lifespan_36K_79sites', which makes use of the Hierarchical Bayesian Regression algorithm trained on 37,128 subjects from 79 different collection sites, across the human lifespan.
+
 :::{.callout-note}
 Please refer to the Group's [Normative Modeling Graphical User Interface (GUI)](https://pcnportal.dccn.nl/) for more information. For reference to the template Python code used to calculate the deviation scores, please look at the Group's [Braincharts GUI](https://pcntoolkit.readthedocs.io/en/latest/pages/apply_normative_models.html).
 :::
 
-[**Considerations**]{.underline}:
+[**Considerations**]{.underline}:\
+Ideally, both adaptation and testing sets would be balanced by age, sex, and site (covariates) following something like a 60/40 or 70/30 split of healthy controls. **However**, given our limited sample size, we decided to keep all of our healthy control and patient data **isolated**.
 
--   Ideally, both adaptation and testing sets would be balanced by age, sex, and site (covariates) following something like a 60/40 or 70/30 split of healthy controls. **However**, given our limited sample size, we decided to keep all of our healthy control and patient data **isolated**.
-    -   *In our analysis*: The **adaptation set** is used to calibrate for site (**only** [healthy controls]{.underline}) while the **testing set** is used **exclusively** for [patient-phenotyped data]{.underline}.
-        -   Healthy control phenotypes include 'A-C-' (amyloid *negative*, cognitive impairment *negative*) & 'A+C-' (amyloid *positive*, cognitive impairment *negative*).
-        -   Patient-phenotypes include 'A+C+' (amyloid *positive*, cognitive impairment *positive*) & 'A-C+' (amyloid *negative*, cognitive impairment *positive*).
--   As a consequence of simultaneous conditions, a smaller sample size & larger site numbers (59 sites), our group elected to utilize the MRI manufacturer (3 total) of the subject's imaging data to act as a pseudo 'site' variable thus giving more power to viably calibrate for potential 'site' influences.
-    -   '1' = 'GE'
-    -   '2' = 'Philips'
-    -   '3' = 'Siemens'
+*In our analysis*: The **adaptation set** is used to calibrate for site (**only** [healthy controls]{.underline}) while the **testing set** is used **exclusively** for [patient-phenotyped data]{.underline}.
+Healthy control phenotypes include 'A-C-' (amyloid *negative*, cognitive impairment *negative*) & 'A+C-' (amyloid *positive*, cognitive impairment *negative*).
+
+Patient-phenotypes include 'A+C+' (amyloid *positive*, cognitive impairment *positive*) & 'A-C+' (amyloid *negative*, cognitive impairment *positive*).
+As a consequence of both a smaller sample size & larger site numbers (59 sites), our group elected to utilize the MRI manufacturer (3 total) of the subject's imaging data to act as a pseudo `site` variable thus giving more power to viably calibrate for potential "site" influences.\
+- `1` = `GE`\
+- `2` = `Philips`\
+- `3` = `Siemens`
 
 # Code Workflow {#code-workflow}
-
+***
 1.  [Data Frame Initialization](#data-frame-initialization)
+
 :::{.callout-important}
- Some manual edits may be needed to match your imaging variables to the column headers listed in the normative model CSV template (listed in the [Normative Modeling GUI](https://pcnportal.dccn.nl/)). Specifically, go to `Compute here!` menu bar >  `Data type`, select **ThickAvg** > `Normative Model`, select **HBR_lifespan_36K_79sites** > wait a moment, and the site will populate the line "Download template csv file here."
- :::
+ Some manual edits may be needed to match your imaging variables to the column headers listed in the normative model CSV template (listed in the [Normative Modeling GUI](https://pcnportal.dccn.nl/)). Specifically, go to `Compute here!` menu bar >  `Data type`, select **ThickAvg** > `Normative Model`, select **HBR_lifespan_36K_79sites** > wait a moment, and the site will populate the line "**Download template csv file here.**"
+:::
+
 2.  [Covariate Distributions, Data Splitting, & Balance Verification](#covariate-distributions-data-splitting-balance-verification)
+
 :::{.callout-note}
 Upon completion of this step, you are then able to run your adaptation and testing data sets through the normative model deviation scores computation via either the [Normative Modeling GUI](https://pcnportal.dccn.nl/) or [Braincharts GUI](https://pcntoolkit.readthedocs.io/en/latest/pages/apply_normative_models.html) if you want to recreate the Python code yourself.
 :::
+
 3.  [Analytic Data Preparation](#analytic-data-preparation)
 4.  [Demographic Descriptives and Statistical Analysis of Cortical Thickness](#demographic-descriptives-and-statistical-analysis-of-cortical-thickness)
 5.  [Regional Analyses: Across-Groups & Pairwise Comparisons](#regional-analyses-across-groups-pairwise-comparisons)
@@ -52,11 +55,13 @@ Upon completion of this step, you are then able to run your adaptation and testi
 7.  [Session Information](#session-information)
 
 # Data Frame Initialization {#data-frame-initialization}
+***
+Set up the R environment for neuroimaging data analysis by specifying CRAN and ggseg repositories and managing package installations with pacman. Load essential libraries and set a working directory to access neuroimaging and demographic datasets, which are then read and prepared for analysis, focusing on group cortical thickness comparisons and deviation score analyses. Rename the 'BioMarkers' variable to 'phenotype' across datasets for consistent terminology.
 
-Prepare the environment for neuroimaging data analysis by setting a CRAN repository, installing and loading necessary packages, and specifying a base directory for data files. Read in any data sets intended for use in these analyses and prepare them for further analysis, including normative modeling. The script is also set to handle the importation of deviation scores once acquired.
 :::{.callout-tip}
 Front-loading the reading-in of all datasets being used in comprehensive analyses at the beginning of your script ensures that the data environment is consistently prepared, which simplifies the replication and validation process for other users.
 :::
+
 ```{r Preliminary Setup, message=FALSE, warning=FALSE}
 # Set CRAN repository for consistent package installation, ggseg for neuroimaging visualizations
 options(repos = c(
@@ -105,9 +110,11 @@ df <- dplyr::rename(df, phenotype = "BioMarkers")
 4. This dataset contains subject FreeSurfer variable deviation scores for your **TESTING** set used in the Normative Modeling GUI/code.
 
 Load and prepare Destrieux atlas data for visualization and analysis. The data from the `ggseg` package, corrected for the correct spelling of Destrieux, is assigned to variables for easy access and plotted to verify the structure and detail of the atlas features and labeled regions.
+
 ::: {.callout-caution}
 The `ggseg` package adds an extra 'e' in the spelling of the name Destrieux, so it's NOT a typo.
 :::
+
 ```{r Preparing the Destrieux Atlas ROI Variables, message=FALSE, warning=FALSE}
 setwd(base_path)
 
@@ -128,7 +135,7 @@ ggplot() +
 ```
 
 # Covariate Distributions, Data Splitting, & Balance Verification {#covariate-distributions-data-splitting-balance-verification}
-
+***
 Visualize and analyze the distribution of MRI manufacturers and models within the dataset after renaming the biomarker variable to phenotype. Bar plots display counts of MRI manufacturers and models grouped by manufacturer, with additional cross-tabulation bar plots showing the number of subjects by phenotype across different sites.
 
 ```{r Phenotype-Site Cross Tabulation Visualizations, message=FALSE, warning=FALSE}
@@ -197,6 +204,7 @@ testing_data <- df_merged %>%
 # write_csv(testing_data, "ADNI_99_Testing.csv")
 
 ```
+
 :::{.callout-note}
 After verifying that the grouping variable and covariates are balanced as desired (i.e., see the next chunk), you can now run them through the normative model computation via the GUI or recreate their code yourself!
 :::
@@ -262,6 +270,8 @@ print(age_summary)
 ```
 
 # Analytic Data Preparation {#analytic-data-preparation}
+***
+Reorganize and recode key variables in the dataset for group cortical thickness comparisons: set the column order for clarity, recode the 'phenotype' variable to categorical levels representing health conditions, and standardize categorical labels for 'site' and 'sex' to enhance readability and analysis consistency.
 
 ```{r Recoding & Reorganizing Analytic Variables for ONLY Group Cortical Thickness Comparisons, message=FALSE, warning=FALSE}
 # Specifying the order of the first few columns for easier viewing
@@ -299,6 +309,8 @@ df_merged$sex <- factor(df_merged$sex)
 ```
 
 # Demographic Descriptives and Statistical Analysis of Cortical Thickness {#demographic-descriptives-and-statistical-analysis-of-cortical-thickness}
+***
+Generate descriptive statistics and visualize the distribution of key variables such as phenotype, age, and sex within the dataset. Employ cross-tabulation to analyze mean cortical thickness and age by phenotype group, and present these distributions using violin and bar plots. Additionally, compute summary statistics for mean cortical thickness and visually represent them using rain cloud plots to highlight differences across phenotype groups.
 
 ```{r Descriptive Statistics by Variable, message=FALSE, warning=FALSE}
 # Count of each variable of interest
@@ -364,6 +376,8 @@ ggplot(df_merged, aes(x = phenotype, y = Mean_Thickness, fill = phenotype, color
 
 ```
 
+Model the impact of phenotype on mean cortical thickness using linear regression, adjusting for covariates such as age and sex. Visualize these relationships and conduct Tukey's HSD tests to identify significant differences between phenotype groups, presenting results in both tabular form and through a significance plot of the Tukey HSD test outcomes.
+
 ```{r Cortical Thickness Modeling, message=FALSE, warning=FALSE, results='asis'}
 # Fit a linear model of Mean_Thickness as a function of phenotype and store it in s_2
 s_2 <- lm(Mean_Thickness ~ phenotype, data = df_merged)
@@ -407,6 +421,8 @@ ggpredict(s_1, c(terms = "age", "phenotype", "sex")) |>
 ```
 
 # Regional Analyses: Across-Groups & Pairwise Comparisons {#regional-analyses-across-groups-pairwise-comparisons}
+***
+Conduct ANOVA to assess differences across phenotype groups in brain regions' FreeSurfer volume measures, then apply False Discovery Rate (FDR) corrections to p-values and calculate F-statistics. Finally, visualize significant regions using a heatmap, categorizing results by significance levels, and incorporating annotations for clearer demarcation of significance groups.
 
 ```{r Across-Groups Comparisons, message=FALSE, warning=FALSE}
 # Apply suffix to all ROI FreeSurfer measures
@@ -471,8 +487,8 @@ df.melted$ROI <- gsub("_rois", "", df.melted$ROI)
 
 # Define group positions and labels
 group_positions <- data.frame(
-  start = c(1, 15, 30),  # example start positions
-  end = c(14, 29, 51),    # example end positions
+  start = c(1, 15, 30),  # will need to adjust depending on your own results
+  end = c(14, 29, 51),    # will need to adjust depending on your own results
   label = c("*", "**", "***")  # example labels for significance
 )
 
@@ -491,9 +507,12 @@ for (i in 1:nrow(group_positions)) {
     annotate("text", x = (group_positions$start[i] + group_positions$end[i]) / 2, y = Inf, label = group_positions$label[i], vjust = 2, hjust = 0.5)
 }
 
+# Print the cutomized heatmap
 print(heatmap_plot)
 
 ```
+
+Adjust brain region names in the data to align with the **Destrieux** atlas nomenclature for both left and right hemispheres, performing extensive renaming to match the standard naming convention. This ensures the region names are compatible with established neuroimaging atlas formats for subsequent analyses.
 
 ```{r Convert Across-Groups Data to Destrieux Atlas Format, message=FALSE, warning=FALSE}
 # Remove suffix from ROI list
@@ -580,6 +599,8 @@ right.df.stats$region <- renamed_ROIs
 
 ```
 
+Visualize significant FDR-corrected p-values for brain regions across groups using gradient-filled maps for both left and right hemispheres, highlighted with different colors to represent statistical significance levels. These plots are organized in a grid layout to facilitate comparison between hemispheres.
+
 ```{r Plot Significant FDR-Corrected p-Values for Across-Groups Data, message=FALSE, warning=FALSE}
 # Left hemisphere
 left_pvalues <- ggseg(.data=left.df.stats, atlas = desterieux, mapping=aes(fill=FDR.pvalue), hemisphere = "left", colour = "white", size = 0.2) + 
@@ -597,13 +618,12 @@ cowplot::plot_grid(left_pvalues,right_pvalues, nrow = 2, labels = "AUTO")
 
 ```
 
-```{r Pairwise Comparisons, message=FALSE, warning=FALSE}
+Conduct pairwise statistical comparisons between controls and Alzheimer's disease patients on cortical thickness measures. Perform t-tests on each brain region, followed by FDR corrections to adjust for multiple comparisons, organizing the results into a clean data frame with significance levels marked.
+
+```{r Pairwise Comparisons in Control vs AD, message=FALSE, warning=FALSE}
 # Data frame preparation
 df.CA <- df_merged[grep("HC|AD", df_merged$phenotype), ] # Subset just Controls and Alzheimer's ("CA")
-df.CM <- df_merged[grep("HC|MCI", df_merged$phenotype), ] # Subset just Controls and MCI ("CM")
-df.MA <- df_merged[grep("MCI|AD", df_merged$phenotype), ] # Subset just MCI and Alzheimer's ("MA")
 
-### Control vs Alzheimer's t-test
 # Perform t-test and extract t-stat value, p-value, and parameters
 df.CA_stats <- as.data.frame(sapply(df.CA[6:153], function(x) t.test(x ~ df.CA$phenotype)$statistic))
 df.CA_stats1 <- as.data.frame(sapply(df.CA[6:153], function(x) t.test(x ~ df.CA$phenotype)$p.value))
@@ -631,7 +651,14 @@ df.CA_stats$ROI <- gsub("\\.t$", "", df.CA_stats$ROI)
 # List the ROIs that are significant after FDR correction
 df.CA_stats_sig <- df.CA_stats[which(df.CA_stats$FDR.pvalue <0.05),]
 
-### Control vs MCI t-test
+```
+
+Conduct t-tests between control and MCI groups, extracting t-statistics and p-values for brain regions, followed by FDR correction to account for multiple comparisons, leading to a cleaned and organized presentation of significant regions.
+
+```{r Pairwise Comparisons in Control vs MCI, message=FALSE, warning=FALSE}
+# Data frame preparation
+df.CM <- df_merged[grep("HC|MCI", df_merged$phenotype), ] # Subset just Controls and MCI ("CM")
+
 # Perform t-test and extract t-stat value, p-value, and parameters
 df.CM_stats <- as.data.frame(sapply(df.CM[6:153], function(x) t.test(x ~ df.CM$phenotype)$statistic))
 df.CM_stats1 <- as.data.frame(sapply(df.CM[6:153], function(x) t.test(x ~ df.CM$phenotype)$p.value))
@@ -658,6 +685,14 @@ df.CM_stats$ROI <- gsub("\\.t$", "", df.CM_stats$ROI)
 
 # List the ROIs that are significant after FDR correction
 df.CM_stats_sig <- df.CM_stats[which(df.CM_stats$FDR.pvalue <0.05),]
+
+```
+
+Perform pairwise t-tests between MCI and Alzheimer's groups, extracting critical statistics for comparative analysis, apply FDR corrections for multiple testing, and combine significant results to visualize in a lollipop plot, differentiating groups with colors and annotations for significance levels.
+
+```{r Pairwise Comparisons in MCI vs AD, message=FALSE, warning=FALSE}
+# Data frame preparation
+df.MA <- df_merged[grep("MCI|AD", df_merged$phenotype), ] # Subset just MCI and Alzheimer's ("MA")
 
 ### MCI vs Alzheimer's t-test
 # Perform t-test and extract t-stat value, p-value, and parameters
@@ -716,9 +751,10 @@ ggplot(combined_stats_sig, aes(x = reorder(ROI, statistic), y = statistic, color
 
 ```
 
+Define a function to rename region of interest (ROI) labels for brain imaging data to align with the Destrieux atlas nomenclature. Adjust ROI names based on hemisphere, applying systematic replacements to match atlas standards, and then check for mismatches against the atlas database, allowing for application across multiple datasets and hemispheres.
+
 ```{r Convert Pairwise Data to Destrieux Atlas Format, message=FALSE, warning=FALSE}
-### Rename ROIs to assign nomenclature consistent with the `desterieux` atlas package
-# Automated loop version
+# Rename ROIs to assign nomenclature consistent with the desterieux atlas package # <1>
 rename_rois <- function(df, hemi, desterieux_dims) {
   # Filter based on hemisphere
   hemi_prefix <- ifelse(hemi == "left", "L_", "R_")
@@ -764,6 +800,10 @@ left.df.MA_stats <- rename_rois(df.MA_stats, "left", desterieux_dims)
 right.df.MA_stats <- rename_rois(df.MA_stats, "right", desterieux_dims)
 
 ```
+
+1. Automated loop version
+
+Visualize the significance of FDR-corrected p-values for pairwise comparisons (Control vs. Alzheimer's, Control vs. MCI, and MCI vs. Alzheimer's) across both hemispheres using the Destrieux atlas. Generate separate gradient-filled plots for each comparison and hemisphere, labeling each to reflect the specific groups compared. Display these plots using a grid layout to assess differences effectively.
 
 ```{r Plot Significant FDR-Corrected p-Values for Pairwise Data, message=FALSE, warning=FALSE}
 ### Control vs Alzheimer's
@@ -811,15 +851,20 @@ cowplot::plot_grid(left_MA_pvalues, right_MA_pvalues, nrow = 2)
 ```
 
 # Z-Score Statistics Pipeline
+***
+Transform and reorganize analytic variables for comprehensive analyses by converting the 'phenotype' column into dummy variables, removing superfluous columns, and systematically renaming and reordering columns for clarity. This process ensures data columns align more effectively with analytical needs, including adjusting categorical variables for models and ensuring ROI names are standardized without duplicates.
 
 ```{r Recoding & Reorganizing Analytic Variables for All Other Analyses, message=FALSE, warning=FALSE}
 # Use dummy_cols to create dummy variables for the 'phenotype' column
 df <- dummy_cols(df, select_columns = "phenotype", remove_first_dummy = TRUE, remove_selected_columns = TRUE)
 
+# Rename dummy variable column back to phenotype
+df <- dplyr::rename(df, phenotype = "phenotype_A+C+")
+
 # Omit the 'index' column from the data frame, unnecessary variable
 df <- df[, -which(names(df) == "index")]
 
-# Specifying the order of the first few columns for easier viewing
+# Specifying the order of the first few columns for easier viewing (and the list of columns to exclude from the ROIs)
 desired_order <- c("Subject_ID", "age", "sex", "site", "phenotype")
 
 # Append the remaining column names that are not specified in desired_order
@@ -831,9 +876,6 @@ new_order <- c(desired_order, remaining_cols)
 # Reorder the columns in df according to new_order
 df <- df[, new_order]
 
-# List of columns to exclude from the ROI list
-desired_order <- c("Subject_ID", "age", "sex", "site", "phenotype")
-
 # Extract column names, remove those in desired_order, and remove z-score suffixes
 ROI <- names(df)[!names(df) %in% desired_order & !grepl("_Z_predict", names(df))]
 
@@ -841,23 +883,25 @@ ROI <- names(df)[!names(df) %in% desired_order & !grepl("_Z_predict", names(df))
 ROI <- unique(gsub("_Z_predict", "", ROI))
 
 # Recode phenotype variable
-df$phenotype <- as.factor(df$phenotype)
 df$phenotype <- gsub("0", "MCI", df$phenotype)
 df$phenotype <- gsub("1", "AD", df$phenotype)
+df$phenotype <- as.factor(df$phenotype)
 df$phenotype <- factor(df$phenotype, levels = c("MCI", "AD")) # explicitly set the reference level
 
 # Recode site variable
-df$site <- as.factor(df$site)
 df$site <- gsub("1", "GE", df$site)
 df$site <- gsub("2", "Philips", df$site)
 df$site <- gsub("3", "Siemens", df$site)
+df$site <- as.factor(df$site)
 
 # Recode sex variable, 0= females 1= males
-df$sex <- factor(df$sex)
 df$sex <- gsub("0", "Female", df$sex)
 df$sex <- gsub("1", "Male", df$sex)
+df$sex <- factor(df$sex)
 
 ```
+
+Identify and quantify outliers in brain region deviation scores by applying a defined statistical threshold, creating a binary representation for outlier detection, and summing these to obtain a total outlier score for each subject. The process includes visualizing these scores by phenotype and performing a basic regression analysis to examine the relationship between phenotypes and outlier scores, with additional summarization of the outlier distributions across phenotypes.
 
 ```{r Binarize Outliers, Create Total Outlier Score Across Total ROIs, and Brief Analyses, message=FALSE, warning=FALSE}
 # Establish outlier threshold
@@ -892,14 +936,14 @@ ggplot(df, aes(x = phenotype, y = total_outlier_score, color = phenotype, fill =
 describeBy(df$total_outlier_score, df$phenotype, IQR = T)
 
 # Basic regression analysis with phenoype as predictor and total outlier score as outcome
-summary(lm(total_outlier_score ~ phenotype, data = df))
 s1<- lm(total_outlier_score ~ phenotype, data = df)
-confint(s1) # Provides CI
-rm(s1)
+tab_model(s1, show.ci = 0.95, title = "Linear Model: Total Outlier Score as a Function of Phenotype")
 
 ```
 
 # ADNI vs PDC Preliminary Analyses {#adni-pdc}
+***
+Evaluate correlations between brain region deviation scores derived from hierarchical versus linear Bayesian regression models by merging relevant datasets and calculating Pearson correlation coefficients for predefined brain region subsets. The code handles large data by segmenting regions into smaller subsets to prevent memory overload and applies the Benjamini-Hochberg procedure to correct for multiple comparisons. The results are visualized using scatter and lollipop plots to highlight significant correlations across the brain regions, categorizing significance levels based on adjusted p-values.
 
 ```{r BLR vs HBR Correlation}
 # Merge datasets on SubjectID
@@ -1042,51 +1086,8 @@ ggplot(correlation_df, aes(x = reorder(Region, Correlation), y = Correlation, co
 
 ```
 
-```{r ADNI BLR vs PDC BLR ANOVA}
-# Rename SubjectID variable to Subject_ID
-df <- dplyr::rename(df, SubjectID = "Subject_ID")
-
-# Merge datasets on SubjectID
-ADNI_PDC <- inner_join(df, PDC_BLR, by = "SubjectID")
-
-# List to store all ANOVA results
-all_anova_results <- list()
-
-# Process each subset of brain regions
-for (brain_regions in brain_regions_list) {
-    anova_results <- list()
-    for(region in brain_regions) {
-        region_hbr <- paste(region, ".HBR", sep = "")
-        region_blr <- paste(region, ".BLR", sep = "")
-        
-        # Ensure both variables are present in the dataset
-        if(region_hbr %in% names(merged_data) && region_blr %in% names(merged_data)) {
-            # Conduct ANOVA and extract the p-value
-            model <- aov(merged_data[[region_hbr]] ~ merged_data[[region_blr]])
-            anova_results[[region]] <- summary(model)[[1]]["Pr(>F)"]
-        }
-    }
-    # Add subset results to the master list
-    all_anova_results <- c(all_anova_results, anova_results)
-}
-
-# Convert the list to a data frame for easy viewing
-anova_df <- data.frame(
-    Region = names(all_anova_results),
-    P_Value = sapply(all_anova_results, function(x) x),
-    row.names = NULL
-)
-
-# Apply the FDR correction to the p-values
-anova_df$Adjusted_P_Value <- p.adjust(anova_df$P_Value, method = "fdr")
-
-# Print the results
-print(anova_df)
-
-```
-
 # Session Information {#session-information}
-
+***
 To enhance **reproducibility**, details about the **working environment** used for these analyses can be found below.
 
 ```{r}
