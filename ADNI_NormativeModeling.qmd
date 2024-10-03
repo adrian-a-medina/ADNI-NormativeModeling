@@ -841,32 +841,48 @@ brain_regions <- c("L_G&S_frontomargin", "L_G&S_occipital_inf", "L_G&S_paracentr
                    "R_S_suborbital", "R_S_subparietal", "R_S_temporal_inf", "R_S_temporal_sup", 
                    "R_S_temporal_transverse")
 
-# Compute correlations for each brain region
-correlation_results <- list()
+# Initialize a list to store all correlation results
+all_correlation_results <- list()
 
-for(region in brain_regions) {
-    region_hbr <- paste(region, ".HBR", sep = "")
-    region_blr <- paste(region, ".BLR", sep = "")
-    
-    # Ensure both variables are present in the dataset
-    if(region_hbr %in% names(merged_data) && region_blr %in% names(merged_data)) {
-        # Use cor.test to get both correlation and p-value
-        test_result <- cor.test(merged_data[[region_hbr]], merged_data[[region_blr]], 
-                                method = "pearson", use = "complete.obs")
+# Define subsets of brain regions to avoid buffer overflow
+brain_regions_1 <- c()
+brain_regions_2 <- c()
+brain_regions_3 <- c()
+brain_regions_4 <- c()
+brain_regions_5 <- c()
+
+# List to store all brain region subsets
+brain_regions_list <- list(brain_regions_1, brain_regions_2, brain_regions_3, brain_regions_4, brain_regions_5)
+
+# Process each subset of brain regions
+for (brain_regions in brain_regions_list) {
+    correlation_results <- list()
+    for(region in brain_regions) {
+        region_hbr <- paste(region, ".HBR", sep = "")
+        region_blr <- paste(region, ".BLR", sep = "")
         
-        # Store results in a list
-        correlation_results[[region]] <- list(
-            Correlation = test_result$estimate,
-            P_Value = test_result$p.value
-        )
+        # Ensure both variables are present in the dataset
+        if(region_hbr %in% names(merged_data) && region_blr %in% names(merged_data)) {
+            # Use cor.test to get both correlation and p-value
+            test_result <- cor.test(merged_data[[region_hbr]], merged_data[[region_blr]], 
+                                    method = "pearson", use = "complete.obs")
+            
+            # Store results in a list
+            correlation_results[[region]] <- list(
+                Correlation = test_result$estimate,
+                P_Value = test_result$p.value
+            )
+        }
     }
+    # Add subset results to the master list
+    all_correlation_results <- c(all_correlation_results, correlation_results)
 }
 
 # Convert the list to a data frame for easy viewing
 correlation_df <- data.frame(
-    Region = names(correlation_results),
-    Correlation = sapply(correlation_results, function(x) x$Correlation),
-    P_Value = sapply(correlation_results, function(x) x$P_Value),
+    Region = names(all_correlation_results),
+    Correlation = sapply(all_correlation_results, function(x) x$Correlation),
+    P_Value = sapply(all_correlation_results, function(x) x$P_Value),
     row.names = NULL
 )
 
@@ -989,12 +1005,14 @@ df <- cbind(df, df3)
 # Remove df3 from your R environment as it's no longer needed
 rm(df3)
 
-# Create the box plot with colored outlines and filled points
+# Create a group difference box plot with colored outlines and filled points
 ggplot(df, aes(x = phenotype, y = total_outlier_score, color = phenotype, fill = phenotype)) +
   geom_boxplot(outlier.shape = NA, fill = NA, size = 1) +  # Draw box plots with no fill, only outlines
   geom_jitter(width = 0.2, size = 2, shape = 21) +  # Add jittered points with the same color
   labs(x = "Phenotype", y = "Total Outlier Score") +
   theme_minimal() +
+  scale_color_manual(values=c("MCI" ="mediumturquoise", "AD"="lightslateblue")) +  # Color outline by phenotype
+  scale_fill_manual(values=c("MCI" ="mediumturquoise", "AD"="lightslateblue")) +  # Fill points by phenotype
   theme(legend.position = "right")
 
 # Calculate descriptives of total outlier score grouped by phenotype group
@@ -1004,7 +1022,7 @@ describeBy(df$total_outlier_score, df$phenotype, IQR = T)
 summary(lm(total_outlier_score ~ phenotype, data = df))
 s1<- lm(total_outlier_score ~ phenotype, data = df)
 confint(s1) # Provides CI
-# rm(s1)
+rm(s1)
 
 ```
 
