@@ -15,7 +15,7 @@ date: last-modified
 # Project Overview
 
 [**Analytic Background**]{.underline}**:\
-**Our study data were a subset derived from the Alzheimer's Disease Neuroimaging Initiative (ADNI) ADNI3 wave data bank. This was due to the harmonization of scanner sequence protocols across data collection sites that began during this wave. We only included subjects that had both structural MRI and PET (amyloid & tau) data collected, followed by QA of these data. This analysis leveraged a normative model developed by the Predictive Clinical Neuroscience Group at the Donders Institute and Radboud UMC, which aims to predict and stratify brain disorders on the basis of neuroimaging data. Specifically, we used 'HBR_lifespan_36K_79sites', which makes use of the Hierarchical Bayesian Regression algorithm trained on 37,128 subjects from 79 different collection sites, across the human lifespan.
+**Our study data were a subset derived from the Alzheimer's Disease Neuroimaging Initiative (ADNI) ADNI3 wave data bank. This was due to the harmonization of scanner sequence protocols across data collection sites that began during this wave. We only included subjects that had both structural MRI and PET (amyloid) data collected, followed by QA of these data. This analysis leveraged a normative model developed by the Predictive Clinical Neuroscience Group at the Donders Institute and Radboud UMC, which aims to predict and stratify brain disorders on the basis of neuroimaging data. Specifically, we used 'HBR_lifespan_36K_79sites', which makes use of the Hierarchical Bayesian Regression algorithm trained on 37,128 subjects from 79 different collection sites, across the human lifespan.
 
 -   Please refer to the Group's [Normative Modeling Graphical User Interface (GUI)](https://pcnportal.dccn.nl/) for more information. For reference to the template Python code used to calculate the deviation scores, please look at the Group's [Braincharts GUI](https://pcntoolkit.readthedocs.io/en/latest/pages/apply_normative_models.html).
 
@@ -792,67 +792,63 @@ cowplot::plot_grid(left_MA_pvalues, right_MA_pvalues, nrow = 2)
 # Merge datasets on SubjectID
 merged_data <- inner_join(PDC_HBR, PDC_BLR, by = "SubjectID", suffix = c(".HBR", ".BLR"))
 
-# Specify the brain regions for which correlations will be computed for
-brain_regions <- c("L_G&S_frontomargin", "L_G&S_occipital_inf", "L_G&S_paracentral", 
+# Initialize a list to store all correlation results
+all_correlation_results <- list()
+
+# Define subsets of brain regions to avoid buffer overflow
+brain_regions_1 <- c("L_G&S_frontomargin", "L_G&S_occipital_inf", "L_G&S_paracentral", 
                    "L_G&S_subcentral", "L_G&S_transv_frontopol", "L_G&S_cingul-Ant",
                    "L_G&S_cingul-Mid-Ant", "L_G&S_cingul-Mid-Post", "L_G_cingul-Post-dorsal",
                    "L_G_cingul-Post-ventral", "L_G_cuneus", "L_G_front_inf-Opercular", 
-                   "L_G_front_inf-Orbital", "L_G_front_inf-Triangul", "L_G_front_middle", 
-                   "L_G_front_sup", "L_G_Ins_lg&S_cent_ins", "L_G_insular_short", 
+                   "L_G_front_inf-Orbital", "L_G_front_inf-Triangul", "L_G_front_middle")
+brain_regions_2 <- c("L_G_front_sup", "L_G_Ins_lg&S_cent_ins", "L_G_insular_short", 
                    "L_G_occipital_middle", "L_G_occipital_sup", "L_G_oc-temp_lat-fusifor",
                    "L_G_oc-temp_med-Lingual", "L_G_oc-temp_med-Parahip", "L_G_orbital", 
                    "L_G_pariet_inf-Angular", "L_G_pariet_inf-Supramar", "L_G_parietal_sup", 
-                   "L_G_postcentral", "L_G_precentral", "L_G_precuneus", "L_G_rectus", 
-                   "L_G_subcallosal", "L_G_temp_sup-G_T_transv", "L_G_temp_sup-Lateral",
+                   "L_G_postcentral", "L_G_precentral", "L_G_precuneus")
+brain_regions_3 <- c("L_G_rectus", "L_G_subcallosal", "L_G_temp_sup-G_T_transv", "L_G_temp_sup-Lateral",
                    "L_G_temp_sup-Plan_polar", "L_G_temp_sup-Plan_tempo", "L_G_temporal_inf",
                    "L_G_temporal_middle", "L_Lat_Fis-ant-Horizont", "L_Lat_Fis-ant-Vertical",
                    "L_Lat_Fis-post", "L_Pole_occipital", "L_Pole_temporal", "L_S_calcarine", 
-                   "L_S_central", "L_S_cingul-Marginalis", "L_S_circular_insula_ant",
+                   "L_S_central")
+brain_regions_4 <- c("L_S_cingul-Marginalis", "L_S_circular_insula_ant",
                    "L_S_circular_insula_inf", "L_S_circular_insula_sup", "L_S_collat_transv_ant", 
                    "L_S_collat_transv_post", "L_S_front_inf", "L_S_front_middle", "L_S_front_sup", 
                    "L_S_interm_prim-Jensen", "L_S_intrapariet&P_trans", "L_S_oc_middle&Lunatus", 
-                   "L_S_oc_sup&transversal", "L_S_occipital_ant", "L_S_oc-temp_lat", 
-                   "L_S_oc-temp_med&Lingual", "L_S_orbital_lateral", "L_S_orbital_med-olfact", 
+                   "L_S_oc_sup&transversal", "L_S_occipital_ant", "L_S_oc-temp_lat")
+brain_regions_5 <- c("L_S_oc-temp_med&Lingual", "L_S_orbital_lateral", "L_S_orbital_med-olfact", 
                    "L_S_orbital-H_Shaped", "L_S_parieto_occipital", "L_S_pericallosal", 
                    "L_S_postcentral", "L_S_precentral-inf-part", "L_S_precentral-sup-part", 
                    "L_S_suborbital", "L_S_subparietal", "L_S_temporal_inf", "L_S_temporal_sup", 
-                   "L_S_temporal_transverse", "R_G&S_frontomargin", "R_G&S_occipital_inf", 
-                   "R_G&S_paracentral", "R_G&S_subcentral", "R_G&S_transv_frontopol", 
+                   "L_S_temporal_transverse", "R_G&S_frontomargin")
+brain_regions_6 <- c("R_G&S_occipital_inf", "R_G&S_paracentral", "R_G&S_subcentral", "R_G&S_transv_frontopol", 
                    "R_G&S_cingul-Ant", "R_G&S_cingul-Mid-Ant", "R_G&S_cingul-Mid-Post", 
                    "R_G_cingul-Post-dorsal", "R_G_cingul-Post-ventral", "R_G_cuneus", 
                    "R_G_front_inf-Opercular", "R_G_front_inf-Orbital", "R_G_front_inf-Triangul", 
-                   "R_G_front_middle", "R_G_front_sup", "R_G_Ins_lg&S_cent_ins", 
-                   "R_G_insular_short", "R_G_occipital_middle", "R_G_occipital_sup", 
+                   "R_G_front_middle", "R_G_front_sup")
+brain_regions_7 <- c("R_G_Ins_lg&S_cent_ins", "R_G_insular_short", "R_G_occipital_middle", "R_G_occipital_sup", 
                    "R_G_oc-temp_lat-fusifor", "R_G_oc-temp_med-Lingual", "R_G_oc-temp_med-Parahip", 
                    "R_G_orbital", "R_G_pariet_inf-Angular", "R_G_pariet_inf-Supramar", 
                    "R_G_parietal_sup", "R_G_postcentral", "R_G_precentral", "R_G_precuneus", 
-                   "R_G_rectus", "R_G_subcallosal", "R_G_temp_sup-G_T_transv", "R_G_temp_sup-Lateral",
+                   "R_G_rectus")
+brain_regions_8 <- c("R_G_subcallosal", "R_G_temp_sup-G_T_transv", "R_G_temp_sup-Lateral",
                    "R_G_temp_sup-Plan_polar", "R_G_temp_sup-Plan_tempo", "R_G_temporal_inf", 
                    "R_G_temporal_middle", "R_Lat_Fis-ant-Horizont", "R_Lat_Fis-ant-Vertical", 
                    "R_Lat_Fis-post", "R_Pole_occipital", "R_Pole_temporal", "R_S_calcarine", 
-                   "R_S_central", "R_S_cingul-Marginalis", "R_S_circular_insula_ant", 
-                   "R_S_circular_insula_inf", "R_S_circular_insula_sup", "R_S_collat_transv_ant", 
+                   "R_S_central", "R_S_cingul-Marginalis")
+brain_regions_9 <- c("R_S_circular_insula_ant", "R_S_circular_insula_inf", "R_S_circular_insula_sup", "R_S_collat_transv_ant", 
                    "R_S_collat_transv_post", "R_S_front_inf", "R_S_front_middle", "R_S_front_sup", 
                    "R_S_interm_prim-Jensen", "R_S_intrapariet&P_trans", "R_S_oc_middle&Lunatus", 
                    "R_S_oc_sup&transversal", "R_S_occipital_ant", "R_S_oc-temp_lat", 
-                   "R_S_oc-temp_med&Lingual", "R_S_orbital_lateral", "R_S_orbital_med-olfact", 
+                   "R_S_oc-temp_med&Lingual")
+brain_regions_10 <- c("R_S_orbital_lateral", "R_S_orbital_med-olfact", 
                    "R_S_orbital-H_Shaped", "R_S_parieto_occipital", "R_S_pericallosal", 
                    "R_S_postcentral", "R_S_precentral-inf-part", "R_S_precentral-sup-part", 
                    "R_S_suborbital", "R_S_subparietal", "R_S_temporal_inf", "R_S_temporal_sup", 
                    "R_S_temporal_transverse")
 
-# Initialize a list to store all correlation results
-all_correlation_results <- list()
-
-# Define subsets of brain regions to avoid buffer overflow
-brain_regions_1 <- c()
-brain_regions_2 <- c()
-brain_regions_3 <- c()
-brain_regions_4 <- c()
-brain_regions_5 <- c()
-
 # List to store all brain region subsets
-brain_regions_list <- list(brain_regions_1, brain_regions_2, brain_regions_3, brain_regions_4, brain_regions_5)
+brain_regions_list <- list(brain_regions_1, brain_regions_2, brain_regions_3, brain_regions_4, brain_regions_5, brain_regions_6, brain_regions_7, brain_regions_8, brain_regions_9, brain_regions_10)
 
 # Process each subset of brain regions
 for (brain_regions in brain_regions_list) {
@@ -886,6 +882,9 @@ correlation_df <- data.frame(
     row.names = NULL
 )
 
+# Apply the Benjamini-Hochberg correction to the p-values
+correlation_df$Adjusted_P_Value <- p.adjust(correlation_df$P_Value, method = "BH")
+
 # Print the results
 print(correlation_df)
 
@@ -896,7 +895,6 @@ correlation_df$Region <- factor(correlation_df$Region, levels = correlation_df$R
 # Assuming 'merged_data' contains corresponding columns for HBR and BLR scores
 p <- ggplot(correlation_df, aes(x = Region, y = Correlation)) +
   geom_point(stat = "identity") +
-  geom_smooth(method = "lm", color = "blue") +
   ylim(0.8, 1) +
   labs(title = "Correlation of Deviation Scores Across Brain Regions",
        x = "Brain Region", y = "Correlation Coefficient") +
@@ -907,9 +905,9 @@ p <- ggplot(correlation_df, aes(x = Region, y = Correlation)) +
 print(p)
 
 # Adding a new column for significance level based on p-values
-correlation_df$Significance <- ifelse(correlation_df$P_Value < 0.001, '***',
-                                      ifelse(correlation_df$P_Value < 0.01, '**',
-                                      ifelse(correlation_df$P_Value < 0.05, '*', 'ns')))
+correlation_df$Significance <- ifelse(correlation_df$Adjusted_P_Value < 0.001, '***',
+                                      ifelse(correlation_df$Adjusted_P_Value < 0.01, '**',
+                                      ifelse(correlation_df$Adjusted_P_Value < 0.05, '*', 'ns')))
 
 # Create the lollipop plot
 ggplot(correlation_df, aes(x = reorder(Region, Correlation), y = Correlation, color = Significance)) +
@@ -986,7 +984,7 @@ df$sex <- gsub("1", "Male", df$sex)
 
 ```
 
-```{r Binarize Outliers, Create Total Outlier Score Across Total ROIs, and Brief Analyses message=FALSE, warning=FALSE}
+```{r Binarize Outliers, Create Total Outlier Score Across Total ROIs, and Brief Analyses, message=FALSE, warning=FALSE}
 # Establish outlier threshold
 outlier_threshold <- -1.96 # bottom 2.5%, as used in the Verdi et al., 2023 paper
 
