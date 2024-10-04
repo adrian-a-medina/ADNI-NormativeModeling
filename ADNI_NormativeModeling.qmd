@@ -108,7 +108,7 @@ df <- dplyr::rename(df, phenotype = "BioMarkers")
 
 ```
 
-1.  For referernce, this merged data file is composed of two data sets: `NIDP_DX_Dem_NP_MRI.csv` contains clinical/non-imaging variables and MRI manufacturer information, & `ADNI_lh_rh_thickness_subcort_volumes.csv` contains the FreeSurfer brain thickness measures.
+1.  For reference, this merged data file is composed of two data sets: `NIDP_DX_Dem_NP_MRI.csv` contains clinical/non-imaging variables and MRI manufacturer information, & `ADNI_lh_rh_thickness_subcort_volumes.csv` contains the FreeSurfer brain thickness measures.
 2.  See details under the `important` callout in the [Code Workflow](#code-workflow) section.
 3.  This should be the spreadsheet that will be split into adaptation and testing sets for normative modeling.
 4.  This dataset contains subject FreeSurfer variable deviation scores for your **TESTING** set used in the Normative Modeling GUI/code.
@@ -959,9 +959,13 @@ tab_model(s1, show.ci = 0.95, title = "Linear Model: Total Outlier Score as a Fu
 
 ------------------------------------------------------------------------
 
-Evaluate correlations between brain region deviation scores derived from hierarchical versus linear Bayesian regression models by merging relevant datasets and calculating Pearson correlation coefficients for predefined brain region subsets. The code handles large data by segmenting regions into smaller subsets to prevent memory overload and applies the Benjamini-Hochberg procedure to correct for multiple comparisons. The results are visualized using scatter and lollipop plots to highlight significant correlations across the brain regions, categorizing significance levels based on adjusted p-values.
+Evaluate correlations between brain region deviation scores derived from hierarchical versus linear Bayesian regression models by merging relevant datasets and calculating Pearson correlation coefficients for predefined brain region subsets. The code handles large data by segmenting regions into smaller subsets to prevent memory overload and applies the **Benjamini-Hochberg** procedure to correct for multiple comparisons. The results are visualized using scatter and lollipop plots to highlight significant correlations across the brain regions, categorizing significance levels based on adjusted p-values.
 
-```{r BLR vs HBR Correlation, message=FALSE, warning=FALSE}
+::: callout-note
+The Benjamini-Hochberg (BH) correction is employed in this analysis to adjust for multiple comparisons while maintaining a balance between identifying true associations and limiting false discoveries. This method controls the False Discovery Rate, which is particularly useful in large datasets with many hypotheses. Unlike more conservative methods, such as Bonferroni, which control for all types of errors collectively, the BH correction focuses on the proportion of errors among the rejected hypotheses, enhancing the ability to detect genuine effects without overly increasing the risk of Type I errors. This makes it highly suitable for complex data where tests are not independent, such as in correlation studies involving multiple regions or variables.
+:::
+
+```{r PDC BLR vs HBR Preparation, message=FALSE, warning=FALSE}
 # Merge datasets on SubjectID
 merged_data <- inner_join(PDC_HBR, PDC_BLR, by = "SubjectID", suffix = c(".HBR", ".BLR"))
 
@@ -1023,6 +1027,9 @@ brain_regions_10 <- c("R_S_orbital_lateral", "R_S_orbital_med-olfact",
 # List to store all brain region subsets
 brain_regions_list <- list(brain_regions_1, brain_regions_2, brain_regions_3, brain_regions_4, brain_regions_5, brain_regions_6, brain_regions_7, brain_regions_8, brain_regions_9, brain_regions_10)
 
+```
+
+```{r PDC BLR vs HBR Correlations and Visualizations, message=FALSE, warning=FALSE}
 # Process each subset of brain regions
 for (brain_regions in brain_regions_list) {
     correlation_results <- list()
@@ -1061,7 +1068,7 @@ correlation_df$Adjusted_P_Value <- p.adjust(correlation_df$P_Value, method = "BH
 # Print the results
 print(correlation_df)
 
-# Convert the data to a suitable format for ggplot
+                         # Convert the data to a suitable format for ggplot
 correlation_df$Region <- factor(correlation_df$Region, levels = correlation_df$Region)
 
 # Create a scatter plot for each region showing the correlation values
@@ -1103,11 +1110,14 @@ ggplot(correlation_df, aes(x = reorder(Region, Correlation), y = Correlation, co
 ```
 
 ```{r ADNI BLR vs PDC BLR ANOVA, message=FALSE, warning=FALSE}
+# Rename ADNI data frame
+ADNI_BLR <- df
+
 # Rename SubjectID variable to Subject_ID for consistent merging
-df <- dplyr::rename(df, SubjectID = "Subject_ID")
+ADNI_BLR <- dplyr::rename(ADNI_BLR, SubjectID = "Subject_ID")
 
 # Merge datasets on Subject_ID
-ADNI_PDC <- inner_join(df, PDC_BLR, by = "SubjectID")
+ADNI_PDC <- inner_join(ADNI_BLR, PDC_BLR, by = "SubjectID")
 
 # Initialize a list to store all ANOVA results
 all_anova_results <- list()
