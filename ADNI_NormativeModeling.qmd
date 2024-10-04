@@ -9,7 +9,7 @@ format:
     self-contained: true
     is-particlejs-enabled: true
     code-summary: "Expand Code"
-    favicon: "Logo_Favicon.svg"
+    favicon: "https://raw.githubusercontent.com/adrian-a-medina/ADNI_NormativeModeling/main/Logo_Favicon.svg"
 author: Adrián Medina
 date: last-modified
 ---
@@ -960,7 +960,7 @@ tab_model(s1, show.ci = 0.95, title = "Linear Model: Total Outlier Score as a Fu
 
 ------------------------------------------------------------------------
 
-Evaluate correlations between brain region deviation scores derived from hierarchical versus linear Bayesian regression models by merging relevant datasets and calculating Pearson correlation coefficients for predefined brain region subsets. The code handles large data by segmenting regions into smaller subsets to prevent memory overload and applies the **Benjamini-Hochberg** procedure to correct for multiple comparisons. The results are visualized using scatter and lollipop plots to highlight significant correlations across the brain regions, categorizing significance levels based on adjusted p-values.
+The code handles large data by segmenting regions into smaller subsets to prevent memory overload.
 
 ```{r PDC BLR vs HBR Preparation, message=FALSE, warning=FALSE}
 # Merge datasets on SubjectID
@@ -1025,6 +1025,8 @@ brain_regions_10 <- c("R_S_orbital_lateral", "R_S_orbital_med-olfact",
 brain_regions_list <- list(brain_regions_1, brain_regions_2, brain_regions_3, brain_regions_4, brain_regions_5, brain_regions_6, brain_regions_7, brain_regions_8, brain_regions_9, brain_regions_10)
 
 ```
+
+Evaluate correlations between brain region deviation scores derived from hierarchical versus linear Bayesian regression models by merging relevant datasets and calculating Pearson correlation coefficients for predefined brain region subsets. Apply the **Benjamini-Hochberg** procedure to correct for multiple comparisons. The results are visualized using scatter and lollipop plots to highlight significant correlations across the brain regions, categorizing significance levels based on adjusted p-values.
 
 ::: callout-note
 The Benjamini-Hochberg (BH) correction is employed in this analysis to adjust for multiple comparisons while maintaining a balance between identifying true associations and limiting false discoveries. This method controls the False Discovery Rate, which is particularly useful in large datasets with many hypotheses. Unlike more conservative methods, such as Bonferroni, which control for all types of errors collectively, the BH correction focuses on the proportion of errors among the rejected hypotheses, enhancing the ability to detect genuine effects without overly increasing the risk of Type I errors. This makes it highly suitable for complex data where tests are not independent, such as in correlation studies involving multiple regions or variables.
@@ -1107,6 +1109,8 @@ ggplot(correlation_df, aes(x = reorder(Region, Correlation), y = Correlation, co
 
 ```
 
+Prepare two datasets (ADNI and PDC) by renaming variables, removing specific columns, and adding a study label. Combine these datasets and runs ANOVA tests to compare brain region deviation scores across studies, adjusting results for multiple comparisons using the FDR method. Significant results are highlighted and displayed.
+
 ```{r ADNI BLR vs PDC BLR ANOVA, message=FALSE, warning=FALSE}
 # Rename ADNI data frame
 ADNI_BLR <- df
@@ -1167,7 +1171,9 @@ print(significant_regions)
 
 ```
 
-```{r Prepping ANOVA Results for Visualizations, message=FALSE, warning=FALSE}
+Refine brain region labels for visualization using a consistent nomenclature and display ANOVA results on hemisphere-specific plots, illustrating differences between ADNI and PDC studies with respect to deviation scores. Adjusted p-values are visualized using color gradients to denote significance levels.
+
+```{r ANOVA Visualization, message=FALSE, warning=FALSE}
 # Rename ROIs to assign nomenclature consistent with the desterieux atlas package
 rename_rois <- function(df, hemi, desterieux_dims) {
   # Filter based on hemisphere
