@@ -3,13 +3,13 @@ title: "From Norms to Neuropsychopathology: Exploring Neuroanatomical & Neuropsy
 subtitle: "This study extends analyses conducted by <a href='https://www.neurology.org/doi/10.1212/WNL.0000000000207298'>Verdi et al. (2023)</a>, who utilized normative modeling techniques to delineate neuroanatomical heterogeneity in Alzheimer's disease. We employ a similar methodological framework to supplement these insights by integrating both structural MRI data and neuropsychiatric symptom profiles. This integration allowed us to explore more deeply the neuroanatomical and neuropsychiatric underpinnings of Alzheimer's disease across different phenotypes within our ADNI subset. This study was conducted by the <a href='https://www.mcleanmri.org/ansl.html'>Applied Neuroimaging Statistics Ressearch Laboratory</a> at McLean Hospital & Harvard Medical School."
 format:
   lumo-html: 
-    logo: "Brain Logo.png"
+    logo: "images/Brain Logo.png"
     github-repo: "https://www.github.com/adrian-a-medina/ADNI_NormativeModeling"
     primary-color: "#a31f37"
     self-contained: true
     is-particlejs-enabled: true
     code-summary: "Expand Code"
-    favicon: "Logo_Favicon.svg"
+    favicon: "images/Logo_Favicon.svg"
 author: Adrián Medina
 date: last-modified
 ---
@@ -1107,45 +1107,6 @@ ggplot(correlation_df, aes(x = reorder(Region, Correlation), y = Correlation, co
         axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5, size = 5.5),  # Improve readability of x-axis labels
         legend.title = element_text(face = "bold")  # Bold the legend title for emphasis
     )
-
-```
-
-```{r ADNI BLR vs PDC BLR ANOVA, message=FALSE, warning=FALSE}
-# Rename ADNI data frame
-ADNI_BLR <- df
-
-# Rename SubjectID variable to Subject_ID for consistent merging
-ADNI_BLR <- dplyr::rename(ADNI_BLR, SubjectID = "Subject_ID")
-
-# Merge datasets on Subject_ID
-ADNI_PDC <- inner_join(ADNI_BLR, PDC_BLR, by = "SubjectID")
-
-# Initialize a list to store all ANOVA results
-all_anova_results <- list()
-
-# Process each brain region
-for(region in brain_regions_list) {
-    # Ensure the region is present in both datasets
-    if(region %in% names(ADNI_PDC)) {
-        # Conduct ANOVA and extract the p-value
-        model <- aov(as.formula(paste(region, "~ Group")), data = ADNI_PDC)
-        p_value <- summary(model)[[1]]["Pr(>F)"][1, 1]
-        all_anova_results[[region]] <- p_value
-    }
-}
-
-# Convert the list to a data frame for easy viewing
-anova_df <- data.frame(
-    Region = names(all_anova_results),
-    P_Value = unlist(all_anova_results),
-    row.names = NULL
-)
-
-# Apply the FDR correction to the p-values
-anova_df$Adjusted_P_Value <- p.adjust(anova_df$P_Value, method = "fdr")
-
-# Print the results
-print(anova_df)
 
 ```
 
