@@ -3,13 +3,13 @@ title: "From Norms to Neuropsychopathology: Exploring Neuroanatomical & Neuropsy
 subtitle: "This study extends analyses conducted by <a href='https://www.neurology.org/doi/10.1212/WNL.0000000000207298'>Verdi et al. (2023)</a>, who utilized normative modeling techniques to delineate neuroanatomical heterogeneity in Alzheimer's disease. We employ a similar methodological framework to supplement these insights by integrating both structural MRI data and neuropsychiatric symptom profiles. This integration allowed us to explore more deeply the neuroanatomical and neuropsychiatric underpinnings of Alzheimer's disease across different phenotypes within our ADNI subset. This study was conducted by the <a href='https://www.mcleanmri.org/ansl.html'>Applied Neuroimaging Statistics Ressearch Laboratory</a> at McLean Hospital & Harvard Medical School."
 format:
   lumo-html: 
-    logo: "images/Brain Logo.png"
+    logo: "Brain Logo.png"
     github-repo: "https://www.github.com/adrian-a-medina/ADNI_NormativeModeling"
     primary-color: "#a31f37"
     self-contained: true
     is-particlejs-enabled: true
     code-summary: "Expand Code"
-    favicon: "images/Logo_Favicon.svg"
+    favicon: "Logo_Favicon.svg"
 author: Adrián Medina
 date: last-modified
 ---
@@ -962,10 +962,6 @@ tab_model(s1, show.ci = 0.95, title = "Linear Model: Total Outlier Score as a Fu
 
 Evaluate correlations between brain region deviation scores derived from hierarchical versus linear Bayesian regression models by merging relevant datasets and calculating Pearson correlation coefficients for predefined brain region subsets. The code handles large data by segmenting regions into smaller subsets to prevent memory overload and applies the **Benjamini-Hochberg** procedure to correct for multiple comparisons. The results are visualized using scatter and lollipop plots to highlight significant correlations across the brain regions, categorizing significance levels based on adjusted p-values.
 
-::: callout-note
-The Benjamini-Hochberg (BH) correction is employed in this analysis to adjust for multiple comparisons while maintaining a balance between identifying true associations and limiting false discoveries. This method controls the False Discovery Rate, which is particularly useful in large datasets with many hypotheses. Unlike more conservative methods, such as Bonferroni, which control for all types of errors collectively, the BH correction focuses on the proportion of errors among the rejected hypotheses, enhancing the ability to detect genuine effects without overly increasing the risk of Type I errors. This makes it highly suitable for complex data where tests are not independent, such as in correlation studies involving multiple regions or variables.
-:::
-
 ```{r PDC BLR vs HBR Preparation, message=FALSE, warning=FALSE}
 # Merge datasets on SubjectID
 merged_data <- inner_join(PDC_HBR, PDC_BLR, by = "SubjectID", suffix = c(".HBR", ".BLR"))
@@ -1030,6 +1026,10 @@ brain_regions_list <- list(brain_regions_1, brain_regions_2, brain_regions_3, br
 
 ```
 
+::: callout-note
+The Benjamini-Hochberg (BH) correction is employed in this analysis to adjust for multiple comparisons while maintaining a balance between identifying true associations and limiting false discoveries. This method controls the False Discovery Rate, which is particularly useful in large datasets with many hypotheses. Unlike more conservative methods, such as Bonferroni, which control for all types of errors collectively, the BH correction focuses on the proportion of errors among the rejected hypotheses, enhancing the ability to detect genuine effects without overly increasing the risk of Type I errors. This makes it highly suitable for complex data where tests are not independent, such as in correlation studies involving multiple regions or variables.
+:::
+
 ```{r PDC BLR vs HBR Correlations and Visualizations, message=FALSE, warning=FALSE}
 # Process each subset of brain regions
 for (brain_regions in brain_regions_list) {
@@ -1069,21 +1069,18 @@ correlation_df$Adjusted_P_Value <- p.adjust(correlation_df$P_Value, method = "BH
 # Print the results
 print(correlation_df)
 
-                         # Convert the data to a suitable format for ggplot
+# Convert the data to a suitable format for ggplot
 correlation_df$Region <- factor(correlation_df$Region, levels = correlation_df$Region)
 
 # Create a scatter plot for each region showing the correlation values
 # Assuming 'merged_data' contains corresponding columns for HBR and BLR scores
-p <- ggplot(correlation_df, aes(x = Region, y = Correlation)) +
+ggplot(correlation_df, aes(x = Region, y = Correlation)) +
   geom_point(stat = "identity") +
   ylim(0.8, 1) +
   labs(title = "Correlation of Deviation Scores Across Brain Regions",
        x = "Brain Region", y = "Correlation Coefficient") +
   theme_minimal() +
   theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5, size = 5.5))
-
-# Print the plot
-print(p)
 
 # Adding a new column for significance level based on p-values
 correlation_df$Significance <- ifelse(correlation_df$Adjusted_P_Value < 0.001, '***',
@@ -1107,6 +1104,125 @@ ggplot(correlation_df, aes(x = reorder(Region, Correlation), y = Correlation, co
         axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5, size = 5.5),  # Improve readability of x-axis labels
         legend.title = element_text(face = "bold")  # Bold the legend title for emphasis
     )
+
+```
+
+```{r ADNI BLR vs PDC BLR ANOVA, message=FALSE, warning=FALSE}
+# Rename ADNI data frame
+ADNI_BLR <- df
+
+# Rename SubjectID variable to Subject_ID for consistent merging
+ADNI_BLR <- dplyr::rename(ADNI_BLR, SubjectID = "Subject_ID")
+
+# Remove columns in the data frame ADNI_BLR that have names ending with "_bin"
+ADNI_BLR <- ADNI_BLR[, !grepl("_bin$", names(ADNI_BLR))]
+
+# Add a 'Study' column to each dataset to label the source
+ADNI_BLR$Study <- 'ADNI'
+ADNI_BLR$Study <- as.factor(ADNI_BLR$Study)
+PDC_BLR$Study <- 'PDC'
+PDC_BLR$Study <- as.factor(PDC_BLR$Study)
+
+# Ensure brain_regions_list is a flattened vector if it's currently a list of lists
+brain_regions_vector <- unlist(brain_regions_list)
+
+# Subset the combined data to include only 'SubjectID', 'Study', and the brain region deviation scores
+selected_columns <- c("SubjectID", "Study", brain_regions_vector)
+ADNI_BLR <- ADNI_BLR[selected_columns]
+PDC_BLR <- PDC_BLR[selected_columns]
+
+# Combine the two datasets
+ADNI_PDC <- bind_rows(ADNI_BLR, PDC_BLR)
+
+# Initialize a list to store all ANOVA results
+all_anova_results <- list()
+
+# Loop through each brain region to perform ANOVA
+for (region in brain_regions_vector) {
+  # Correctly construct the formula using as.formula and paste
+  formula_text <- paste("`", region, "` ~ Study", sep = "")
+  formula <- as.formula(formula_text)
+  model <- aov(formula, data = ADNI_PDC)
+  # Extract the p-value
+  p_value <- summary(model)[[1]][["Pr(>F)"]][1]
+  all_anova_results[[region]] <- p_value
+}
+
+# Convert the list of p-values to a data frame
+anova_df <- data.frame(
+  ROI = names(all_anova_results),
+  P_Value = unlist(all_anova_results),
+  row.names = NULL
+)
+
+# Apply the FDR correction to the p-values
+anova_df$FDR.pvalue <- p.adjust(anova_df$P_Value, method = "fdr")
+
+# Optionally, print the adjusted p-values
+print(anova_df)
+
+# Identify regions where differences are significant at the adjusted p-value level (e.g., < 0.05)
+significant_regions <- anova_df[anova_df$FDR.pvalue < 0.05, ]
+print(significant_regions)
+
+```
+
+```{r Prepping ANOVA Results for Visualizations, message=FALSE, warning=FALSE}
+# Rename ROIs to assign nomenclature consistent with the desterieux atlas package
+rename_rois <- function(df, hemi, desterieux_dims) {
+  # Filter based on hemisphere
+  hemi_prefix <- ifelse(hemi == "left", "L_", "R_")
+  anova_df <- df %>%
+    filter(str_detect(ROI, hemi_prefix))
+  
+  # Perform renaming steps
+  x <- gsub(paste0(hemi_prefix), "", anova_df$ROI)
+  patterns <- c("G&S_", "G_", "S_", "_", " bin", "\\.", "cingul ", "Mid ", "Post ", 
+                "inf ", "med ", "sup ", "Fis ant ", "precentral ", "Fis pos ", "lg&S", 
+                "oc temp", "sup and transversal", "orbital H Shaped", "oc sup&transversal", 
+                "prim Jensen", "S oc-temp med&Lingual", "lat fusifor", "middle&Lunatus", 
+                "intrapariet&P trans", "Lat Fis post")
+  replacements <- c("G and S ", "G ", "S ", " ", "", " ", "cingul-", "Mid-", "Post-", 
+                    "inf-", "med-", "sup-", "Fis-ant-", "precentral-", "Fis-pos-", 
+                    "lg and S", "oc-temp", "sup-transversal", "orbital-H Shaped", 
+                    "oc sup and transversal", "prim-Jensen", "S oc-temp med and Lingual", 
+                    "lat-fusifor", "middle and Lunatus", "intrapariet and P trans", 
+                    "Lat Fis-post")
+  for (i in seq_along(patterns)) {
+    x <- gsub(patterns[i], replacements[i], x)
+  }
+  
+  # Match with desterieux ROIs
+  desterieux_ROIs <- as.data.frame(desterieux_dims %>% filter(hemi == hemi))$region
+  compare_lists <- cbind(sort(x), sort(unique(desterieux_ROIs)))
+  list_matches <- compare_lists[,1] %in% compare_lists[,2]
+  
+  if (any(!list_matches)) {
+    warning("There are mismatches in ROI names for the ", hemi, " hemisphere.")
+  }
+  
+  anova_df$region <- x
+  return(anova_df)
+}
+
+# Apply the function to each dataset and hemisphere
+left_anova <- rename_rois(anova_df, "left", desterieux_dims)
+right_anova <- rename_rois(anova_df, "right", desterieux_dims)
+
+# Left hemisphere
+left_pvalues <- ggseg(.data=left_anova, atlas = desterieux, mapping=aes(fill=FDR.pvalue), hemisphere = "left", colour = "white", size = 0.2) + 
+scale_fill_gradientn(limits = c(0,0.05), colours =  rainbow.colors(5))
+
+# Right hemisphere
+right_pvalues <- ggseg(.data=right_anova, atlas = desterieux, mapping=aes(fill=FDR.pvalue), hemisphere = "right", colour = "white", size = 0.2) +
+  scale_fill_gradientn(limits = c(0,0.05), colours = rainbow.colors(5))
+
+# Add titles to individual plots
+left_pvalues <- left_pvalues + labs(title = "ADNI vs PDC ANOVA Results")
+right_pvalues <- right_pvalues + labs(title = "ADNI vs PDC ANOVA Results")
+
+# Combine plots for a comprehensive view
+cowplot::plot_grid(left_pvalues, right_pvalues, nrow = 2)
 
 ```
 
