@@ -9,6 +9,7 @@ format:
     self-contained: true
     is-particlejs-enabled: true
     code-summary: "Expand Code"
+    favicon: "Logo_Favicon.svg"
 author: Adrián Medina
 date: last-modified
 ---
