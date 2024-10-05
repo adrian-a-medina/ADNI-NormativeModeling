@@ -1,0 +1,475 @@
+---
+title: "ADNI FS data stats"
+output: html_notebook
+---
+
+#----------------------------------------------
+# CODE SETUP
+#----------------------------------------------
+# Librarys
+```{r setup}
+library(dplyr)
+library(psych)
+library(tidyr)
+library(readr)
+library(stringr)
+library(matrixStats)
+library(ggseg)
+library(ggsegExtra)
+library(ggsegDesterieux)
+library(cowplot)
+library(data.table)
+library(e1071)
+library(ggplot2)
+library(plot.matrix)
+library(proxy)
+library(RPMG)
+library(ggseg)
+```
+
+# Clear workspace
+```{r}
+rm(list = ls())
+```
+
+#Read in data from ADNI_database
+```{r}
+
+df <- read.csv("~/OneDrive - University College London/Chapter 2 cross sectional AD/ADNI_project/Full_study/Input_NM/All_sites/ThickAvg_ADNI_crosssectional_final.csv")
+
+
+#head(df)
+#str(df)
+```
+
+
+
+#Reformat categorical variables to factors
+
+```{r}
+df$diagnosis <- as.factor(df$diagnosis)
+df$diagnosis <- gsub("0", "Controls", df$diagnosis)
+df$diagnosis <- gsub("5", "MCI", df$diagnosis)
+df$diagnosis <- gsub("4", "Dementia", df$diagnosis)
+
+df$site_id <- as.factor(df$site_id)
+
+## 0= females 1= males
+df$gender <- gsub("0", "Females", df$gender)
+df$gender <- gsub("1", "Males", df$gender)
+df$gender <- factor(df$gender)
+
+
+```
+#----------------------------------------------
+# Demographic data
+#----------------------------------------------
+# How many n in group and how many males and females
+```{r}
+table(df$diagnosis)
+table(df$gender)
+```
+#Descriptive stats
+
+```{r paged.print=FALSE}
+describeBy(df$Mean_Thickness, df$diagnosis)
+d<-(describeBy(df$Mean_Thickness, df$diagnosis))
+
+describeBy(df$age, df$diagnosis)
+
+mean(df$age)
+sd(df$age)
+
+tapply(df$gender, df$diagnosis, summary)
+
+
+```
+#----------------------------------------------
+# Mean Thickness stats
+#----------------------------------------------
+#LM
+```{r}
+summary(lm(Mean_Thickness ~ diagnosis, data = df))
+s_2<- lm(Mean_Thickness ~ diagnosis, data = df)
+confint(s_2)
+```
+```{r}
+TukeyHSD(aov(Mean_Thickness ~ diagnosis, data = df))
+```
+# LM with age and sex covariates 
+```{r}
+summary(lm(Mean_Thickness ~ diagnosis + age + gender, data = df))
+s_1<-lm(Mean_Thickness ~ diagnosis + age + gender, data = df)
+confint(s_1)
+
+anova(lm(Mean_Thickness ~ diagnosis + age + gender, data = df))
+
+```
+```{r}
+TukeyHSD(aov(Mean_Thickness ~ diagnosis, data = df))
+## can you do post hoc adjustments for covariates??
+
+```
+#----------------------------------------------
+#Regional anaylsis 
+#----------------------------------------------
+# Across group comparions 
+# - - - - - - - - - - - - - - - - - - - - - - - - 
+#Apply ANOVA over all ROIs and save as data.frame
+```{r paged.print=FALSE}
+
+df.rois <- df %>% rename_at(vars((6:153)), ~ paste0(., '_rois'))
+
+df.stats <- as.data.frame(sapply(X = df.rois[,grep("_rois", names(df.rois),value = T)], FUN = function(x) summary(aov(x ~ df.rois$diagnosis))[[1]][["Pr(>F)"]][1]))
+names(df.stats) <- "p_value"
+setDT(df.stats, keep.rownames = "ROI")
+head(df.stats, 20)
+
+```
+
+#FDR correction
+```{r}
+df.stats <- cbind(df.stats, p.adjust(df.stats$p_value), method = "fdr")
+names(df.stats)[3] <- "FDR.pvalue"
+head(df.stats)
+
+#!!!!! how many are significant 
+```
+
+#Apply ANOVA over all ROIs and save f_stats as data.frame
+```{r}
+df.f_stats <- as.data.frame(sapply(X = df.rois[,grep("_rois", names(df.rois),value = T)], FUN = function(x) summary(aov(x ~ df.rois$diagnosis))[[1]][["F value"]][1]))
+names(df.f_stats) <- "f_stat"
+setDT(df.f_stats, keep.rownames = "ROI")
+head(df.f_stats, 20)
+
+```
+
+#ROIs that are significant after FDR correction. There are `r length(which(df.stats$FDR.pvalue <0.05))` corrected ROIs that remain significant.
+```{r paged.print=FALSE}
+df.stats[which(df.stats$FDR.pvalue <0.05),]
+
+#df_to_edit <- df.stats[which(df.stats$FDR.pvalue <0.05),]
+
+#write.csv(df_to_edit,'sig_rois_fdr.csv')
+
+```
+
+
+#Convert existing data to desterieux atlas format
+```{r}
+
+df.stats$ROI <- as.data.frame(gsub("_rois", "", df.stats$ROI))
+
+left.df.stats <- df.stats %>%
+  filter(str_detect(ROI, "L_"))
+x <- gsub("L_", "", left.df.stats$ROI)
+y <- gsub("G.S_", "G and S ", x)
+z <- gsub("G_", "G ", y)
+z1 <- gsub("S_", "S ", z)
+z2 <- gsub("_", " ", z1)
+z3 <- gsub(" bin", "", z2)
+z4 <- gsub("\\.", " ", z3)
+z5 <- gsub("cingul ", "cingul-", z4)
+z6 <- gsub("Mid ", "Mid-", z5)
+z7 <- gsub("Post ", "Post-", z6)
+z8 <- gsub("inf ", "inf-", z7)
+z9 <- gsub("med ", "med-", z8)
+z10 <- gsub("sup ", "sup-", z9)
+z11 <- gsub("Fis ant ", "Fis-ant-", z10)
+z12 <- gsub("precentral ", "precentral-", z11)
+z13 <- gsub("Fis pos ", "Fis-pos-", z12)
+z14 <- gsub("lg S", "lg and S", z13)
+z15 <- gsub("oc temp", "oc-temp", z14)
+z16 <- gsub("sup and transversal", "sup-transversal", z15)
+z17 <- gsub("orbital H Shaped", "orbital-H Shaped", z16)
+z18 <- gsub("oc sup-transversal", "oc sup and transversal", z17)
+z19 <- gsub("prim Jensen", "prim-Jensen", z18)
+z20 <- gsub("S oc-temp med-Lingual", "S oc-temp med and Lingual", z19)
+z21 <- gsub("lat fusifor", "lat-fusifor", z20)
+z22 <- gsub("middle Lunatus", "middle and Lunatus", z21)
+z23 <- gsub("intrapariet P trans", "intrapariet and P trans", z22)
+renamed_ROIs <- gsub("Lat Fis post", "Lat Fis-post", z23)
+
+desterieux_ROIs <- as.data.frame(desterieux %>% filter(hemi == "left"))$region
+compare_lists <- cbind(sort(renamed_ROIs), sort(unique(desterieux_ROIs)))
+list_matches <- compare_lists[,1] %in% compare_lists[,2]
+compare_lists[!list_matches,]
+## if no mismatches, than add to data.frame as region
+left.df.stats$region <- renamed_ROIs
+
+
+###right hemi
+
+right.df.stats <- df.stats %>%
+  filter(str_detect(ROI, "R_"))
+x <- gsub("R_", "", right.df.stats$ROI)
+y <- gsub("G.S_", "G and S ", x)
+z <- gsub("G_", "G ", y)
+z1 <- gsub("S_", "S ", z)
+z2 <- gsub("_", " ", z1)
+z3 <- gsub(" bin", "", z2)
+z4 <- gsub("\\.", " ", z3)
+z5 <- gsub("cingul ", "cingul-", z4)
+z6 <- gsub("Mid ", "Mid-", z5)
+z7 <- gsub("Post ", "Post-", z6)
+z8 <- gsub("inf ", "inf-", z7)
+z9 <- gsub("med ", "med-", z8)
+z10 <- gsub("sup ", "sup-", z9)
+z11 <- gsub("Fis ant ", "Fis-ant-", z10)
+z12 <- gsub("precentral ", "precentral-", z11)
+z13 <- gsub("Fis pos ", "Fis-pos-", z12)
+z14 <- gsub("lg S", "lg and S", z13)
+z15 <- gsub("oc temp", "oc-temp", z14)
+z16 <- gsub("sup and transversal", "sup-transversal", z15)
+z17 <- gsub("orbital H Shaped", "orbital-H Shaped", z16)
+z18 <- gsub("oc sup-transversal", "oc sup and transversal", z17)
+z19 <- gsub("prim Jensen", "prim-Jensen", z18)
+z20 <- gsub("S oc-temp med-Lingual", "S oc-temp med and Lingual", z19)
+z21 <- gsub("lat fusifor", "lat-fusifor", z20)
+z22 <- gsub("middle Lunatus", "middle and Lunatus", z21)
+z23 <- gsub("intrapariet P trans", "intrapariet and P trans", z22)
+renamed_ROIs <- gsub("Lat Fis post", "Lat Fis-post", z23)
+
+desterieux_ROIs <- as.data.frame(desterieux %>% filter(hemi == "right"))$region
+compare_lists <- cbind(sort(renamed_ROIs), sort(unique(desterieux_ROIs)))
+list_matches <- compare_lists[,1] %in% compare_lists[,2]
+compare_lists[!list_matches,]
+
+
+## if no mismatches, than add to data.frame as region
+right.df.stats$region <- renamed_ROIs
+
+
+```
+# Plot FDR-correct p-values (0-0.06) using ggseg
+```{r message=FALSE}
+
+#left                               
+left_pvalues <- ggseg(.data=left.df.stats, atlas = desterieux, mapping=aes(fill=FDR.pvalue), hemisphere = "left", colour = "white", size = 0.2) + 
+scale_fill_gradientn(limits = c(0,0.05), colours =  rainbow.colors(5))
+
+#right
+right_pvalues <- ggseg(.data=right.df.stats, atlas = desterieux, mapping=aes(fill=FDR.pvalue), hemisphere = "right", colour = "white", size = 0.2) +
+  scale_fill_gradientn(limits = c(0,0.05), colours = rainbow.colors(5))
+
+plot_grid(left_pvalues,right_pvalues, nrow = 2, labels = "AUTO")
+
+ggsave("~/Downloads/corticalthicknesspvalue_maps.pdf")
+
+```
+# - - - - - - - - - - - - - - - - - - - - - - - - 
+# Pairwise comparions 
+# - - - - - - - - - - - - - - - - - - - - - - - -
+# Data prepration
+```{r}
+df.CD <- df[grep("Controls|Dementia", df$diagnosis), ] #Subset just Controls and Dementia ("CD")
+df.CM <- df[grep("Controls|MCI", df$diagnosis), ] #Subset just Controls and MCI ("CM")
+df.MD <- df[grep("MCI|Dementia", df$diagnosis), ] #Subset just MCI and Dementia ("MD")
+```
+
+# 1. Controls vs Dementia t-test
+```{r}
+df.CD_stats <- as.data.frame(sapply(df.CD[6:153], function(x) t.test(x ~ df.CD$diagnosis)$statistic))
+df.CD_stats1 <- as.data.frame(sapply(df.CD[6:153], function(x) t.test(x ~ df.CD$diagnosis)$p.value))
+df.CD_stats2 <- as.data.frame(sapply(df.CD[6:153], function(x) t.test(x ~ df.CD$diagnosis)$parameter))
+##? other measures?
+df.CD_stats <- cbind(df.CD_stats ,df.CD_stats1)
+df.CD_stats <- cbind(df.CD_stats ,df.CD_stats2)
+rm(df.CD_stats1,df.CD_stats2)
+``` 
+# Column clean up
+```{r}
+df.CD_stats$t_statistic <- df.CD_stats[2] #rename col
+names(df.CD_stats) <- c('statistic', 'p.value', 'parameter')
+df.CD_stats[4] <- NULL
+``` 
+# FDR correction 
+```{r}
+df.CD_stats <- cbind(df.CD_stats, p.adjust(df.CD_stats$p.value), method = "fdr")
+names(df.CD_stats)[4] <- "FDR.pvalue"
+df.CD_stats[5] <- NULL
+```
+# Column clean up
+```{r}
+df.CD_stats <- tibble::rownames_to_column(df.CD_stats, "ROI") #Create ROI col
+df.CD_stats$ROI <- gsub(".t", "", df.CD_stats$ROI) #clean up ROI names
+```
+# ROIs significant post FDR correction
+There are `r length(which(df.stats$FDR.pvalue <0.05))` corrected ROIs that remain significant.
+```{r paged.print=FALSE}
+#df.CD_stats[which(df.CD_stats$FDR.pvalue <0.05),] 
+df.CD_stats_sig <- df.CD_stats[which(df.CD_stats$FDR.pvalue <0.05),]
+write.csv(df.CD_stats_sig,'CD_sig_rois_fdr.csv')
+```
+#Convert to desterieux atlas format
+```{r}
+df.CD_stats$ROI <- as.data.frame(gsub("_rois", "", df.CD_stats$ROI))
+
+left.df.CD_stats <- df.CD_stats %>%
+  filter(str_detect(ROI, "L_"))
+x <- gsub("L_", "", left.df.CD_stats$ROI)
+y <- gsub("G.S_", "G and S ", x)
+z <- gsub("G_", "G ", y)
+z1 <- gsub("S_", "S ", z)
+z2 <- gsub("_", " ", z1)
+z3 <- gsub(" bin", "", z2)
+z4 <- gsub("\\.", " ", z3)
+z5 <- gsub("cingul ", "cingul-", z4)
+z6 <- gsub("Mid ", "Mid-", z5)
+z7 <- gsub("Post ", "Post-", z6)
+z8 <- gsub("inf ", "inf-", z7)
+z9 <- gsub("med ", "med-", z8)
+z10 <- gsub("sup ", "sup-", z9)
+z11 <- gsub("Fis ant ", "Fis-ant-", z10)
+z12 <- gsub("precentral ", "precentral-", z11)
+z13 <- gsub("Fis pos ", "Fis-pos-", z12)
+z14 <- gsub("lg S", "lg and S", z13)
+z15 <- gsub("oc temp", "oc-temp", z14)
+z16 <- gsub("sup and transversal", "sup-transversal", z15)
+z17 <- gsub("orbital H Shaped", "orbital-H Shaped", z16)
+z18 <- gsub("oc sup-transversal", "oc sup and transversal", z17)
+z19 <- gsub("prim Jensen", "prim-Jensen", z18)
+z20 <- gsub("S oc-temp med-Lingual", "S oc-temp med and Lingual", z19)
+z21 <- gsub("lat fusifor", "lat-fusifor", z20)
+z22 <- gsub("middle Lunatus", "middle and Lunatus", z21)
+z23 <- gsub("intrapariet P trans", "intrapariet and P trans", z22)
+renamed_ROIs <- gsub("Lat Fis post", "Lat Fis-post", z23)
+
+desterieux_ROIs <- as.data.frame(desterieux %>% filter(hemi == "left"))$region
+compare_lists <- cbind(sort(renamed_ROIs), sort(unique(desterieux_ROIs)))
+list_matches <- compare_lists[,1] %in% compare_lists[,2]
+compare_lists[!list_matches,]
+## if no mismatches, than add to data.frame as region
+left.df.CD_stats$region <- renamed_ROIs
+
+
+###right hemi
+
+right.df.CD_stats <- df.CD_stats %>%
+  filter(str_detect(ROI, "R_"))
+x <- gsub("R_", "", right.df.CD_stats$ROI)
+y <- gsub("G.S_", "G and S ", x)
+z <- gsub("G_", "G ", y)
+z1 <- gsub("S_", "S ", z)
+z2 <- gsub("_", " ", z1)
+z3 <- gsub(" bin", "", z2)
+z4 <- gsub("\\.", " ", z3)
+z5 <- gsub("cingul ", "cingul-", z4)
+z6 <- gsub("Mid ", "Mid-", z5)
+z7 <- gsub("Post ", "Post-", z6)
+z8 <- gsub("inf ", "inf-", z7)
+z9 <- gsub("med ", "med-", z8)
+z10 <- gsub("sup ", "sup-", z9)
+z11 <- gsub("Fis ant ", "Fis-ant-", z10)
+z12 <- gsub("precentral ", "precentral-", z11)
+z13 <- gsub("Fis pos ", "Fis-pos-", z12)
+z14 <- gsub("lg S", "lg and S", z13)
+z15 <- gsub("oc temp", "oc-temp", z14)
+z16 <- gsub("sup and transversal", "sup-transversal", z15)
+z17 <- gsub("orbital H Shaped", "orbital-H Shaped", z16)
+z18 <- gsub("oc sup-transversal", "oc sup and transversal", z17)
+z19 <- gsub("prim Jensen", "prim-Jensen", z18)
+z20 <- gsub("S oc-temp med-Lingual", "S oc-temp med and Lingual", z19)
+z21 <- gsub("lat fusifor", "lat-fusifor", z20)
+z22 <- gsub("middle Lunatus", "middle and Lunatus", z21)
+z23 <- gsub("intrapariet P trans", "intrapariet and P trans", z22)
+renamed_ROIs <- gsub("Lat Fis post", "Lat Fis-post", z23)
+
+desterieux_ROIs <- as.data.frame(desterieux %>% filter(hemi == "right"))$region
+compare_lists <- cbind(sort(renamed_ROIs), sort(unique(desterieux_ROIs)))
+list_matches <- compare_lists[,1] %in% compare_lists[,2]
+compare_lists[!list_matches,]
+
+
+## if no mismatches, than add to data.frame as region
+right.df.CD_stats$region <- renamed_ROIs
+
+```
+ Plot FDR-correct p-values (0-0.06) using ggseg
+```{r message=FALSE}
+
+#left                               
+left_CD_pvalues <- ggseg(.data=left.df.CD_stats, atlas = desterieux, mapping=aes(fill=FDR.pvalue), hemisphere = "left", colour = "white", size = 0.2) + 
+scale_fill_gradientn(limits = c(0,0.05), colours =  rainbow.colors(5))
+
+#right
+right_CD_pvalues <- ggseg(.data=right.df.CD_stats, atlas = desterieux, mapping=aes(fill=FDR.pvalue), hemisphere = "right", colour = "white", size = 0.2) +
+  scale_fill_gradientn(limits = c(0,0.05), colours = rainbow.colors(5))
+
+plot_grid(left_CD_pvalues,right_CD_pvalues, nrow = 2, labels = "AUTO")
+
+ggsave("~/Downloads/corticalthicknesspvalue_maps.pdf")
+
+
+```
+#-
+#-
+# 2. Controls vs MCI t-test
+```{r}
+df.CM_stats <- as.data.frame(sapply(df.CM[6:153], function(x) t.test(x ~ df.CM$diagnosis)$statistic))
+df.CM_stats1 <- as.data.frame(sapply(df.CM[6:153], function(x) t.test(x ~ df.CM$diagnosis)$p.value))
+df.CM_stats2 <- as.data.frame(sapply(df.CM[6:153], function(x) t.test(x ~ df.CM$diagnosis)$parameter))
+##? other measures?
+df.CM_stats <- cbind(df.CM_stats ,df.CM_stats1)
+df.CM_stats <- cbind(df.CM_stats ,df.CM_stats2)
+rm(df.CM_stats1,df.CM_stats2)
+``` 
+# Column clean up
+```{r}
+df.CM_stats$t_statistic <- df.CM_stats[2] #rename col
+names(df.CM_stats) <- c('statistic', 'p.value', 'parameter')
+df.CM_stats[4] <- NULL
+``` 
+# FDR correction 
+```{r}
+df.CM_stats <- cbind(df.CM_stats, p.adjust(df.CM_stats$p.value), method = "fdr")
+names(df.CM_stats)[4] <- "FDR.pvalue"
+df.CM_stats[5] <- NULL
+```
+# Column clean up
+```{r}
+df.CM_stats <- tibble::rownames_to_column(df.CM_stats, "ROI") #Create ROI col
+df.CM_stats$ROI <- gsub(".t", "", df.CM_stats$ROI) #clean up ROI names
+```
+# ROIs significant post FDR correction
+There are `r length(which(df.stats$FDR.pvalue <0.05))` corrected ROIs that remain significant.
+```{r paged.print=FALSE}
+#df.CM_stats[which(df.CM_stats$FDR.pvalue <0.05),] 
+df.CM_stats_sig <- df.CM_stats[which(df.CM_stats$FDR.pvalue <0.05),]
+write.csv(df.CM_stats_sig,'CM_sig_rois_fdr.csv')
+```
+# 3. MCI vs Dementia t-test
+```{r}
+df.MD_stats <- as.data.frame(sapply(df.MD[6:153], function(x) t.test(x ~ df.MD$diagnosis)$statistic))
+df.MD_stats1 <- as.data.frame(sapply(df.MD[6:153], function(x) t.test(x ~ df.MD$diagnosis)$p.value))
+df.MD_stats2 <- as.data.frame(sapply(df.MD[6:153], function(x) t.test(x ~ df.MD$diagnosis)$parameter))
+##? other measures?
+df.MD_stats <- cbind(df.MD_stats ,df.MD_stats1)
+df.MD_stats <- cbind(df.MD_stats ,df.MD_stats2)
+rm(df.MD_stats1,df.MD_stats2)
+``` 
+# Column clean up
+```{r}
+df.MD_stats$t_statistic <- df.MD_stats[2] #rename col
+names(df.MD_stats) <- c('statistic', 'p.value', 'parameter')
+df.MD_stats[4] <- NULL
+``` 
+# FDR correction 
+```{r}
+df.MD_stats <- cbind(df.MD_stats, p.adjust(df.MD_stats$p.value), method = "fdr")
+names(df.MD_stats)[4] <- "FDR.pvalue"
+df.MD_stats[5] <- NULL
+```
+# Column clean up
+```{r}
+df.MD_stats <- tibble::rownames_to_column(df.MD_stats, "ROI") #Create ROI col
+df.MD_stats$ROI <- gsub(".t", "", df.MD_stats$ROI) #clean up ROI names
+```
+# ROIs significant post FDR correction
+There are `r length(which(df.stats$FDR.pvalue <0.05))` corrected ROIs that remain significant.
+```{r paged.print=FALSE}
+#df.MD_stats[which(df.MD_stats$FDR.pvalue <0.05),]
+df.MD_stats_sig <- df.MD_stats[which(df.MD_stats$FDR.pvalue <0.05),]
+write.csv(df.MD_stats_sig,'MD_sig_rois_fdr.csv')
+```

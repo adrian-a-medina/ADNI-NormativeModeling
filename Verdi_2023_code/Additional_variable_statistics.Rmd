@@ -1,0 +1,583 @@
+---
+title: "Additional_variable_stats"
+author: "Serena Verdi"
+date: "26/10/2021"
+output: html_document
+---
+
+Summary: This script runs statistical tests on cleaned cognitive, biospecimen (CSF amyloid and p-tau) and apoe genotype data. Data has been cleaned and processed via the 'Additional_varaibles_SV' script, this will need to be run, and outputs will need to be saved before running this script
+
+Paths to data will need to be changed accordingly.
+
+
+#-----------------------------------------------
+# Code setup
+#-----------------------------------------------
+# Librarys
+```{r setup}
+library(dplyr)
+library(psych)
+library(tidyr)
+library(readr)
+library(ADNIMERGE)
+library(data.table)
+library(matrixStats)
+library(cowplot)
+library(extrafont)
+```
+
+# Clear workspace
+```{r}
+rm(list = ls())
+```
+#Read in data 
+
+```{r}
+## Composite Cognitive Score
+z_cc <- read.csv("~/OneDrive - University College London/Chapter 2 cross sectional AD/ADNI_project/Full_study/Results/z_score_stats_cognition/z_scores_cc.csv")
+
+## CSF measures
+z_csf <- read.csv("~/OneDrive - University College London/Chapter 2 cross sectional AD/ADNI_project/Full_study/Results/z_score_biospec/z_scores_bs.csv")
+
+## MMSE Updated!
+z_mmse <- read.csv("~/OneDrive - University College London/Chapter 2 cross sectional AD/ADNI_project/Full_study/Results/z_score_stats_cognition/z_score_mmse_updated.csv")  
+
+
+## APOE status
+
+z_apoe <- read.csv("~/OneDrive - University College London/Chapter 2 cross sectional AD/ADNI_project/Full_study/Results/z_score_biospec/z_scores_apoe.csv")
+```
+#Column names
+```{r}
+#colnames(z_cc)
+```
+#-----------------------------------------------
+#Create total outlier score
+#-----------------------------------------------
+# Thresholding z-scores 
+```{r}
+# outlier_threshold <- -1.65 ## bottom 5%
+outlier_threshold <- -1.96 ## bottom 2.5%
+# outlier_threshold <- -2.58 ## bottom 0.05%
+```
+# Binerising z-scores
+```{r}
+# z-cc
+temp<- as.data.frame(ifelse(z_cc[,7:155] < outlier_threshold,1,0))
+temp <- temp %>% rename_all(paste0, "_bin")
+z_cc$total_outlier_score <- rowSums(temp)
+z_cc <- cbind(z_cc, temp)
+
+#z-csf
+temp<- as.data.frame(ifelse(z_csf[,7:155] < outlier_threshold,1,0))
+temp <- temp %>% rename_all(paste0, "_bin")
+z_csf$total_outlier_score <- rowSums(temp)
+z_csf <- cbind(z_csf, temp)
+
+#z-mmse
+temp<- as.data.frame(ifelse(z_mmse[,33:181] < outlier_threshold,1,0))
+temp <- temp %>% rename_all(paste0, "_bin")
+z_mmse$total_outlier_score <- rowSums(temp)
+z_mmse <- cbind(z_mmse, temp)
+
+
+#z-apoe
+temp<- as.data.frame(ifelse(z_apoe[,7:155] < outlier_threshold,1,0))
+temp <- temp %>% rename_all(paste0, "_bin")
+z_apoe$total_outlier_score <- rowSums(temp)
+z_apoe <- cbind(z_apoe, temp)
+```
+# Create seperate datasets with group
+```{r}
+#z_cc
+z_cc_controls <- z_cc[grep("Controls", z_cc$diagnosis.x), ] 
+z_cc_mci <- z_cc[grep("MCI", z_cc$diagnosis.x), ] 
+z_cc_dementia <- z_cc[grep("Dementia", z_cc$diagnosis.x), ] 
+
+#z_csf
+z_csf_controls <- z_csf[grep("Controls", z_csf$diagnosis.x), ] 
+z_csf_mci <- z_csf[grep("MCI", z_csf$diagnosis.x), ] 
+z_csf_dementia <- z_csf[grep("Dementia", z_csf$diagnosis.x), ] 
+
+
+#z_mmse
+z_mmse_controls <- z_mmse[grep("CN", z_mmse$diagnosis.x), ] 
+z_mmse_mci <- z_mmse[grep("MCI", z_mmse$diagnosis.x), ] 
+z_mmse_dementia <- z_mmse[grep("Dementia", z_mmse$diagnosis.x), ] 
+```
+# Overall group interaction of total outlier score
+```{r}
+z_cc$diagnosis.x <-  as.factor(z_cc$diagnosis.x)
+summary(lm(total_outlier_score ~ diagnosis.x, data = z_cc))
+```
+
+
+#-----------------------------------------------
+# Linear regression on composite cognitive scores
+#-----------------------------------------------
+# Memory
+
+```{r}
+## Main effect
+#summary(lm(ADNI_MEM ~ total_outlier_score, data = z_cc)) 
+#s1<- lm(ADNI_MEM ~ total_outlier_score, data = z_cc)
+#confint(s1) ##gives CI
+
+##interaction
+summary(lm(ADNI_MEM ~ total_outlier_score*diagnosis.x + age + gender, data = z_cc)) ##outcome ~ predictor
+anova(lm(ADNI_MEM ~ total_outlier_score*diagnosis.x + age + gender, data = z_cc))
+#summary(lm(ADNI_MEM ~ total_outlier_score + diagnosis.x + age + gender + total_outlier_score:diagnosis.x, data = z_cc)) ##outcome ~ predictor
+
+## main effect adjusted 
+summary(lm(ADNI_MEM ~ total_outlier_score + diagnosis.x + age + gender, data = z_cc)) ##outcome ~ predictor main effect
+```
+# Executive function
+```{r}
+## main effect
+#summary(lm(ADNI_EF ~ total_outlier_score, data = z_cc)) 
+
+## interaction
+##interaction
+summary(lm(ADNI_EF ~ total_outlier_score*diagnosis.x + age + gender, data = z_cc)) ##outcome ~ predictor
+anova(lm(ADNI_EF ~ total_outlier_score*diagnosis.x + age + gender, data = z_cc))
+#summary(lm(ADNI_MEM ~ total_outlier_score + diagnosis.x + age + gender + total_outlier_score:diagnosis.x, data = z_cc)) ##outcome ~ predictor
+
+## main effect adjusted 
+summary(lm(ADNI_EF ~ total_outlier_score + diagnosis.x + age + gender, data = z_cc)) ##outcome ~ predictor main effect
+```
+#-----------------------------------------------
+# Visualisations
+#-----------------------------------------------
+# change dementia to AD in diagnosis
+```{r}
+z_cc$diagnosis.x <- gsub("Dementia", "AD", z_cc$diagnosis.x)
+
+```
+
+# change order of factors to suit figure legend
+```{r}
+z_cc$diagnosis.x <- factor(z_cc$diagnosis.x, levels = c("Controls", "MCI", "AD"))
+
+```
+
+# total_outlier_score x ADNI_MEM
+```{r}
+# loess real fit (local estimate of smoothing)
+ggplot(z_cc, aes(x = total_outlier_score , y = ADNI_MEM )) + 
+  geom_point() +
+  stat_smooth(method = "loess", col = "red" , size = 1)
+
+# quadratic
+ggplot(z_cc, aes(x = total_outlier_score, y = ADNI_MEM, color= diagnosis.x )) + 
+  geom_point() +
+  stat_smooth(method = "lm", col = "red", formula = y ~ x + I(x^2), size = 1)
+
+# lines for each group
+p <- z_cc %>% ggplot(aes(total_outlier_score, ADNI_MEM)) 
+p + 
+  geom_point(aes(col = diagnosis.x)) + 
+    geom_smooth(aes(col = diagnosis.x), method = 'lm', formula = y ~ x + I(x^2)) +
+    theme(legend.background = element_rect(fill = "transparent"),
+          legend.justification = c(0, 1),
+          legend.position = c(0, 1))
+
+
+# lines for each group
+p <- z_cc %>% ggplot(aes(total_outlier_score, ADNI_MEM)) 
+p + 
+  # geom_point(aes(col = diagnosis.x)) + 
+    # geom_smooth(aes(col = diagnosis.x), method = 'lm', formula = y ~ x + I(x^2)) +
+    geom_smooth(aes(col = diagnosis.x), method = 'lm', formula = y ~ x) +
+  geom_smooth(method = 'lm', formula = y ~ x, col = "black") +
+    theme(legend.background = element_rect(fill = "transparent"),
+          legend.justification = c(0, 1),
+          legend.position = c(0, 1))
+
+
+# lines for each group
+p <- z_cc %>% ggplot(aes(total_outlier_score,ADNI_MEM)) 
+p + 
+  geom_smooth(aes(col = diagnosis.x), method = 'lm', formula = y ~ x, fill= "snow2") +
+  theme_minimal() +
+  theme(text=element_text(family="Times New Roman", face="bold", size=16)) + #Times New Roman, 12pt, Bold
+  labs(colour = "Group", y= "Memory function", x= "Total outlier score") + # change label text
+  scale_color_manual(values=c("Controls" =  "grey65" ,  "MCI" ="mediumturquoise", "AD"="lightslateblue"))
+
+```
+
+# total_outlier_score x ADNI_EF
+```{r}
+# linear
+ggplot(z_cc, aes(x = total_outlier_score , y = ADNI_EF )) + 
+  geom_point() +
+  stat_smooth(method = "lm", col = "red", formula = y ~ x , size = 1)
+
+
+# quadratic
+ggplot(z_cc, aes(x = total_outlier_score, y = ADNI_EF, color= diagnosis.x)) + 
+  geom_point() +
+  stat_smooth(method = "lm", col = "red", formula = y ~ x + I(x^2), size = 1)
+
+# lines for each group
+p <- z_cc %>% ggplot(aes(total_outlier_score, ADNI_EF)) 
+p + 
+  geom_point(aes(col = diagnosis.x)) + 
+    geom_smooth(aes(col = diagnosis.x), method = 'lm', formula = y ~ x + I(x^2)) +
+    theme(legend.background = element_rect(fill = "transparent"),
+          legend.justification = c(0, 1),
+          legend.position = c(0, 1))
+
+
+# lines for each group
+p <- z_cc %>% ggplot(aes(total_outlier_score, ADNI_EF)) 
+p + 
+  geom_smooth(aes(col = diagnosis.x), method = 'lm', formula = y ~ x, fill= "snow2") +
+  theme_minimal() +
+  theme(text=element_text(family="Times New Roman", face="bold", size=16)) + #Times New Roman, 12pt, Bold
+  labs(colour = "Group", y= "Executive function", x= "Total outlier score") + # change label text
+  scale_color_manual(values=c("Controls" =  "grey65" ,  "MCI" ="mediumturquoise", "AD"="lightslateblue"))
+```
+#-
+# R_G_precentral (primary somatosensory cortex)  x ADNI_MEM
+```{r}
+#Raw z-scores 
+
+summary(lm(ADNI_MEM ~ R_G_precentral + age + gender, data = z_cc))
+
+ggplot(z_cc, aes(x = R_G_precentral , y = ADNI_MEM, color= diagnosis.x)) + 
+  geom_point() +
+  stat_smooth(method = "lm", col = "red", formula = y ~ x , size = 1)
+
+
+# line though groups
+
+z_cc$diagnosis.x <- as.factor(z_cc$diagnosis.x)
+is.factor(z_cc$diagnosis.x)
+
+p <- z_cc %>% ggplot(aes(R_G_precentral, ADNI_MEM)) 
+
+p + 
+  geom_point(aes(col = diagnosis.x)) + 
+    geom_smooth(aes(col = diagnosis.x), method = 'lm') +
+    theme(legend.background = element_rect(fill = "transparent"),
+          legend.justification = c(0, 1),
+          legend.position = c(0, 1))
+
+```
+# L_S_postcentral (primary motor cortex) x ADNI_MEM
+```{r}
+#Raw z-scores 
+
+summary(lm(ADNI_MEM ~ L_S_postcentral*diagnosis.x + age + gender, data = z_cc))
+
+ggplot(z_cc, aes(x = L_S_postcentral , y = ADNI_MEM, color= diagnosis.x)) + 
+  geom_point() +
+  stat_smooth(method = "lm", col = "red", formula = y ~ x , size = 1)
+
+
+# line though groups
+
+z_cc$diagnosis.x <- as.factor(z_cc$diagnosis.x)
+is.factor(z_cc$diagnosis.x)
+
+p <- z_cc %>% ggplot(aes(L_S_postcentral, ADNI_MEM)) 
+
+p + 
+  geom_point(aes(col = diagnosis.x)) + 
+    geom_smooth(aes(col = diagnosis.x), method = 'lm') +
+    theme(legend.background = element_rect(fill = "transparent"),
+          legend.justification = c(0, 1),
+          legend.position = c(0, 1))
+
+```
+
+# hippocampus x ADNI_MEM
+```{r}
+#Raw z-scores 
+
+summary(lm(ADNI_MEM ~ L_G_oc.temp_med.Parahip + age + gender, data = z_cc))
+
+ggplot(z_cc, aes(x = L_G_oc.temp_med.Parahip , y = ADNI_MEM, color= diagnosis.x)) + 
+  geom_point() +
+  stat_smooth(method = "lm", col = "red", formula = y ~ x , size = 1)
+
+
+# line though groups
+
+z_cc$diagnosis.x <- as.factor(z_cc$diagnosis.x)
+is.factor(z_cc$diagnosis.x)
+
+p <- z_cc %>% ggplot(aes(L_G_oc.temp_med.Parahip, ADNI_MEM)) 
+
+p + 
+  geom_point(aes(col = diagnosis.x)) + 
+    geom_smooth(aes(col = diagnosis.x), method = 'lm') +
+    theme(legend.background = element_rect(fill = "transparent"),
+          legend.justification = c(0, 1),
+          legend.position = c(0, 1))
+
+```
+# Decriptives
+```{r paged.print=FALSE}
+describeBy(z_csf$ABETA, z_csf$diagnosis.x, IQR = T)
+describeBy(z_csf$PTAU, z_csf$diagnosis.x, IQR = T)
+
+mean(z_csf$ABETA)
+sd(z_csf$ABETA)
+
+mean(z_csf$PTAU)
+sd(z_csf$PTAU)
+
+
+
+```
+#-----------------------------------------------
+# Linear regression on CSF measures
+#-----------------------------------------------
+# ABETA
+```{r}
+#unadjusted INTERACTIONS
+#summary(lm(total_outlier_score ~ ABETA*diagnosis.x, data = z_csf))
+anova(lm(total_outlier_score ~ ABETA*diagnosis.x, data = z_csf))
+#summary(lm(total_outlier_score ~ ABETA + diagnosis.x  + ABETA:diagnosis.x, data = z_csf)) #same as above
+
+#unadjusted MAIN EFFECT
+summary(lm(total_outlier_score ~ ABETA, data = z_csf))
+#anova(lm(total_outlier_score ~ ABETA, data = z_csf))
+# adjusted for hippocampal volume
+#summary(lm(total_outlier_score ~ ABETA + hemimean_hippcampal_vol , data = z_csf)) 
+```
+
+# PTAU
+```{r}
+#unadjusted INTERACTIONS
+#summary(lm(total_outlier_score ~ PTAU*diagnosis.x, data = z_csf))
+anova(lm(total_outlier_score ~ PTAU*diagnosis.x, data = z_csf))
+#summary(lm(total_outlier_score ~ PTAU + diagnosis.x  + PTAU:diagnosis.x, data = z_csf)) #same as above
+
+#unadjusted MAIN EFFECT
+summary(lm(total_outlier_score ~ PTAU, data = z_csf))
+
+#unadjusted ##interactions only
+#summary(lm(total_outlier_score ~ PTAU:diagnosis.x, data = z_csf))
+```
+#-----------------------------------------------
+# Visualisations
+#-----------------------------------------------
+
+# change dementia to AD in diagnosis
+```{r}
+z_csf$diagnosis.x <- gsub("Dementia", "AD", z_csf$diagnosis.x)
+
+```
+
+# change order of factors to suit figure legend
+```{r}
+z_csf$diagnosis.x <- factor(z_csf$diagnosis.x, levels = c("Controls", "MCI", "AD"))
+
+```
+# total_outlier_score x ABETA
+```{r}
+# linear
+ggplot(z_csf, aes(x = ABETA , y = total_outlier_score, color= diagnosis.x )) + 
+  geom_point() +
+  xlim(90, 300) +
+  ylim(2, 80) +
+  stat_smooth(method = "lm", col = "red", formula = y ~ x , size = 1)
+
+# quadratic
+ggplot(z_csf, aes(x = ABETA, y = total_outlier_score, color= diagnosis.x )) + 
+  geom_point() +
+  stat_smooth(method = "lm", col = "red", formula = y ~ x + I(x^2), size = 1)
+
+#log transform ABETA
+ggplot(z_csf, aes(x = ABETAlog , y =total_outlier_score, color= diagnosis.x)) + 
+  geom_point() +
+  stat_smooth(method = "lm", col = "red", formula = y ~ x , size = 1)
+
+# lines for each group
+p <- z_csf %>% ggplot(aes(ABETAlog, total_outlier_score)) 
+p + 
+  geom_point(aes(col = diagnosis.x)) + 
+    geom_smooth(aes(col = diagnosis.x), method = 'lm') +
+    theme(legend.background = element_rect(fill = "transparent"),
+          legend.justification = c(0, 1),
+          legend.position = c(0, 1))
+
+# lines for each group
+p <- z_csf %>% ggplot(aes(ABETAlog, total_outlier_score)) 
+p + 
+  geom_smooth(aes(col = diagnosis.x), method = 'lm', formula = y ~ x, fill= "snow2") +
+  theme_minimal() +
+  theme(text=element_text(family="Times New Roman", face="bold", size=12)) + #Times New Roman, 12pt, Bold
+  labs(colour = "Group", y= "Total outlier score", x= "CSF amyloid") + # change label text
+  scale_color_manual(values=c("Controls" =  "grey65" ,  "MCI" ="mediumturquoise", "AD"="lightslateblue"))
+
+
+# lines for each group
+p <- z_csf %>% ggplot(aes(ABETAlog, total_outlier_score)) 
+p + 
+  geom_smooth(aes(col = diagnosis.x), method = 'lm', formula = y ~ x, fill= "snow2") +
+  theme_minimal() +
+  theme(text=element_text(family="Times New Roman", face="bold", size=16)) + #Times New Roman, 12pt, Bold
+  labs(colour = "Group", x= "CSF amyloid", y= "Total outlier score") + # change label text
+  scale_color_manual(values=c("Controls" =  "grey65" ,  "MCI" ="mediumturquoise", "AD"="lightslateblue"))
+```
+
+# total_outlier_score x PTAU
+```{r}
+# linear
+ggplot(z_csf, aes(x = PTAU , y = total_outlier_score, color= diagnosis.x )) + 
+  geom_point() +
+  stat_smooth(method = "lm", col = "red", formula = y ~ x , size = 1)
+
+# quadratic
+ggplot(z_csf, aes(x = PTAU, y = total_outlier_score )) + 
+  geom_point() +
+  stat_smooth(method = "lm", col = "red", formula = y ~ x + I(x^2), size = 1)
+
+# lines for each group
+p <- z_csf %>% ggplot(aes(PTAU, total_outlier_score)) 
+p + 
+  geom_point(aes(col = diagnosis.x)) + 
+    geom_smooth(aes(col = diagnosis.x), method = 'lm') +
+    theme(legend.background = element_rect(fill = "transparent"),
+          legend.justification = c(0, 1),
+          legend.position = c(0, 1))
+
+
+# lines for each group
+p <- z_csf %>% ggplot(aes(PTAU, total_outlier_score)) 
+p + 
+  geom_smooth(aes(col = diagnosis.x), method = 'lm', formula = y ~ x, fill= "snow2") +
+  theme_minimal() +
+  theme(text=element_text(family="Times New Roman", face="bold", size=16)) + #Times New Roman, 12pt, Bold
+  labs(colour = "Group", x= "CSF phospho-tau ", y= "Total outlier score") + # change label text
+  scale_color_manual(values=c("Controls" =  "grey65" ,  "MCI" ="mediumturquoise", "AD"="lightslateblue"))
+```
+
+# variables together 
+```{r}
+# PTAU and ABETA
+  ggplot(z_csf, aes(x = PTAU , y = ABETA, color= diagnosis.x )) + 
+  geom_point() +
+  stat_smooth(method = "lm", col = "red", formula = y ~ x , size = 1)
+
+# MEM and EF
+  ggplot(z_cc, aes(x = ADNI_EF , y = ADNI_MEM, color= diagnosis.x )) + 
+  geom_point() +
+  stat_smooth(method = "lm", col = "red", formula = y ~ x , size = 1)
+```
+#-----------------------------------------------
+# Linear regression on MMSE measures
+#-----------------------------------------------
+# Decriptives
+```{r paged.print=FALSE}
+describeBy(z_mmse$MMSCORE, z_mmse$diagnosis.x, IQR = T)
+```
+
+# Total MMSE score
+```{r}
+#unadjusted
+summary(lm(MMSCORE ~ total_outlier_score, data = z_mmse))
+
+#adjusted
+summary(lm(MMSCORE ~ total_outlier_score + age.x + gender.x, data = z_mmse)) 
+
+#adjusted ##interaction
+summary(lm(MMSCORE ~ total_outlier_score*diagnosis.x + age.x + gender.x, data = z_mmse)) 
+
+```
+
+## Seperated by group
+```{r}
+#controls 
+summary(lm(MMSCORE ~ total_outlier_score, data = z_mmse_controls)) 
+
+#mci 
+summary(lm(MMSCORE ~ total_outlier_score, data = z_mmse_mci)) 
+
+#dementia
+summary(lm(MMSCORE ~ total_outlier_score, data = z_mmse_dementia)) 
+```
+#-----------------------------------------------
+# Visualisations
+#-----------------------------------------------
+# total_outlier_score x total MMSE score
+```{r}
+
+# linear
+ggplot(z_mmse, aes(x = total_outlier_score , y = MMSCORE )) + 
+  geom_point() +
+  stat_smooth(method = "lm", col = "red", formula = y ~ x , size = 1)
+
+
+# quadratic
+ggplot(z_mmse, aes(x = total_outlier_score, y = MMSCORE, color= diagnosis.x)) + 
+  geom_point() +
+  stat_smooth(method = "lm", col = "red", formula = y ~ x + I(x^2), size = 1)
+
+
+# lines for each group
+
+p <- z_mmse %>% ggplot(aes(total_outlier_score, MMSCORE)) 
+
+p + 
+  geom_point(aes(col = diagnosis.x)) + 
+    geom_smooth(aes(col = diagnosis.x), method = 'lm', formula = y ~ x + I(x^2)) +
+    theme(legend.background = element_rect(fill = "transparent"),
+          legend.justification = c(0, 1),
+          legend.position = c(0, 1))
+
+
+```
+# L_S_postcentral (primary motor cortex) x MMSE
+```{r}
+#Raw z-scores 
+
+summary(lm(MMSCORE ~ L_S_postcentral*diagnosis.x + age.x + gender.x, data = z_mmse))
+
+ggplot(z_mmse, aes(x = L_S_postcentral , y = MMSCORE, color= diagnosis.x)) + 
+  geom_point() +
+  stat_smooth(method = "lm", col = "red", formula = y ~ x , size = 1)
+
+
+# line though groups
+
+z_mmse$diagnosis.x <- as.factor(z_mmse$diagnosis.x)
+is.factor(z_mmse$diagnosis.x)
+
+p <- z_mmse %>% ggplot(aes(L_S_postcentral, MMSCORE)) 
+
+p + 
+  geom_point(aes(col = diagnosis.x)) + 
+    geom_smooth(aes(col = diagnosis.x), method = 'lm') +
+    theme(legend.background = element_rect(fill = "transparent"),
+          legend.justification = c(0, 1),
+          legend.position = c(0, 1))
+
+```
+
+
+#-----------------------------------------------
+# Statistics on APOE measures
+#-----------------------------------------------
+# apoe descriptive statistics total_outlier score
+```{r paged.print=FALSE}
+describeBy(z_apoe$total_outlier_score, z_apoe$apoe_status, IQR = T)
+table(z_apoe$apoe_status, z_apoe$diagnosis)
+```
+# APOE Statistics
+```{r paged.print=FALSE}
+#table(z_apoe$total_outlier_score, z_apoe$apoe_status)
+summary(lm(total_outlier_score ~ apoe_status*diagnosis, data = z_apoe))
+
+TukeyHSD(aov(total_outlier_score ~ apoe_status*diagnosis, data = z_apoe))
+
+```
+# APOE Visualistaions
+```{r}
+ggplot(z_apoe, aes(y=total_outlier_score, x=apoe_status)) +
+  geom_boxplot(varwidth = T, outlier.shape = 1, fill = "lightgrey", color = "midnightblue", outlier.color = "midnightblue")+
+  theme_cowplot()
+```

@@ -1,0 +1,1172 @@
+---
+title: "z-score statistics pipeline"
+output:
+  html_notebook: default
+  word_document: default
+---
+Authors: 
+Serena Verdi
+James H Cole
+
+Summary: This script runs the core statistical tests. This uses 4 classes of variables (1) Mean cortcial thickness (2) Total outlier score (3) Outliers at each brain region (4) Hamming distance of outlier scores. 
+Input(s): df which includes z-score NM output, diagnosis labels, age, gender, site
+Tests: t-tests, linear regression/ ANOVAs
+Visualisations: box and whisker plots, scatter plots, denisty plots, outlier maps proportional to group, 
+Abbreviations: NM= (neuroanatomical) normative modelling
+Particpant group = "diagnosis" or "group"
+#----------------------------------------------           
+## - - - Set up - - -
+#----------------------------------------------
+# Import libraries
+```{r setup}
+library(cowplot)
+library(data.table)
+library(e1071)
+library(dplyr)
+library(ggplot2)
+library(plot.matrix)
+library(proxy)
+library(psych)
+library(tidyr)
+library(stringr)
+library(e1071)
+library(RPMG)
+library(viridis)
+library(effectsize)
+library(corrplot)
+library(ggseg)
+library(ggsegExtra)
+library(ggsegDesterieux)
+library(extrafont)
+library(extrafontdb)
+library(ggpubr)
+```
+#Clear work space
+```{r}
+rm(list = ls())
+```
+#----------------------------------------------
+## - - - Prepare data  - - -
+#----------------------------------------------
+#Read in the z-score data
+```{r}
+df <- read.csv("~/OneDrive - University College London/Chapter 2 cross sectional AD/ADNI_project/Full_study/Output_NM/Output_70split_all_sites/NM_output_70_site62_subjectids.csv") ##adjust path here
+
+#head(df)
+#str(df)
+```
+#Reformat categorical variables to factors
+```{r}
+df$diagnosis <- as.factor(df$diagnosis)
+df$site_id <- as.factor(df$site_id)
+```
+#Assign gender to numerical output
+```{r}
+## from the input for the n0= females 1= males
+df$gender <- gsub("0", "Females", df$gender)
+df$gender <- gsub("1", "Males", df$gender)
+df$gender <- factor(df$gender)
+```
+# Brief check of numbers within each group
+# n = diagnosis 
+```{r}
+table(df$diagnosis) #each diagnosis
+table(df$gender) #split across gender
+```
+
+#Binerise outliers and create total_outlier score ACROSS total ROIs (score per participant)
+```{r}
+# outlier_threshold <- -1.65 ## bottom 5%
+outlier_threshold <- -1.96 ## bottom 2.5%
+# outlier_threshold <- -2.58 ## bottom 0.05%
+df3 <- as.data.frame(ifelse(df[,6:153] < outlier_threshold,1,0)) # apply to z-score data
+df3 <- df3 %>% rename_all(paste0, "_bin") #rename all binerised columns to have the suffix "_bin"
+df$total_outlier_score <- rowSums(df3) # sum all of binerised outliers
+df <- cbind(df, df3)
+rm(df3)
+```
+#----------------------------------------------
+# - - - Total outlier score stats - - - 
+#----------------------------------------------
+# Scatter plot to see outliers according to diagnosis 
+```{r}
+plot(df$total_outlier_score, col=df$diagnosis, pch=as.numeric(df$diagnosis))
+```
+#Descriptive statistics ove total_outlier score
+```{r paged.print=FALSE}
+describeBy(df$total_outlier_score, df$diagnosis, IQR = T)
+```
+#Group difference plot
+```{r}
+df$diagnosis <- factor(df$diagnosis, levels = c("Controls", "MCI", "Dementia")) ##changed here! The factors for the bar ordering
+
+ggplot(df, aes (y=total_outlier_score, x=diagnosis, fill= diagnosis, alpha=diagnosis)) +
+  geom_boxplot(varwidth = T, outlier.shape = 1)+
+  theme_minimal() +
+  labs(colour = "Group", y= "Total outlier score", x= "Group") +
+  theme(text=element_text(family="Times New Roman", face="bold", size=16)) + #Times New Roman, 12pt, Bold
+  scale_fill_manual(values=c("Controls" =  "grey65" ,  "MCI" ="mediumturquoise", "Dementia"="lightslateblue")) +
+  scale_alpha_manual(values=c(0.3,0.3,0.3))
+```
+#Linear regression
+```{r}
+summary(lm(total_outlier_score ~ diagnosis, data = df))
+s1<- lm(total_outlier_score ~ diagnosis, data = df)
+confint(s1) ##gives CI
+rm(s1)
+```
+# Linear regression - adjusted
+```{r}
+summary(lm(total_outlier_score ~ diagnosis + age + gender, data = df))
+s2<-lm(total_outlier_score ~ diagnosis + age + gender, data = df)
+anova(lm(total_outlier_score ~ diagnosis + age + gender, data = df))
+confint(s2)
+rm(s2)
+```
+## Post-hoc tests
+```{r}
+TukeyHSD(aov(total_outlier_score ~ diagnosis, data = df))
+```
+# normal distribution?
+```{r}
+ggdensity(df$total_outlier_score, 
+          main = "distribution ",
+          xlab = "total outlier count")
+
+shapiro.test(df$total_outlier_score)
+
+```
+
+#----------------------------------------------
+# Counting outliers in each group
+#----------------------------------------------
+
+# Controls
+```{r}
+# maximum number of outliers
+df %>% filter(diagnosis == "Controls") %>%
+  select(contains("_bin")) %>%
+  colSums() %>%
+  max()
+
+# maximum number of regions with outliers 
+z <- df %>% filter(diagnosis == "Controls") %>%
+  select(contains("_bin")) %>%
+  colSums()
+length(which(z > 0))
+```
+#MCI
+```{r}
+# maximum number of outliers
+df %>% filter(diagnosis == "MCI") %>%
+  select(contains("_bin")) %>%
+  colSums() %>%
+  max()
+
+# maximum number of regions with outliers
+z <- df %>% filter(diagnosis == "MCI") %>%
+  select(contains("_bin")) %>%
+  colSums()
+length(which(z > 0))
+```
+# AD
+```{r paged.print=FALSE}
+
+# maximum number of outliers
+roi_with_most_outliers <- df %>% filter(diagnosis == "Dementia") %>%
+  select(contains("_bin")) %>%
+  colSums() %>%
+  max()
+
+#diagnosis_size <- count(df %>% filter(diagnosis == "Dementia"))
+
+z <- df %>% filter(diagnosis == "Dementia") %>%
+  select(contains("_bin")) %>%
+  colSums()
+length(which(z > 0))
+
+# maximum number of regions with outliers
+roi_with_at_least_one_outlier <- length(which(z > 0))
+roi_with_at_least_one_outlier
+
+# region with the highest proportion of outliers
+#roi_with_most_outliers/diagnosis_size
+
+rm(z)
+
+df %>% filter(diagnosis == "Dementia") %>%
+  select(contains("total_outlier_score")) %>%
+  colSums() %>%
+  median() 
+
+
+d <- df %>% filter(diagnosis == "Dementia") 
+median(d$total_outlier_score)
+range(d$total_outlier_score)
+
+```
+#----------------------------------------------
+# Mean thickness stats
+#----------------------------------------------
+# Descriptive statistics by group 
+```{r paged.print=FALSE}
+describeBy(df$Mean_Thickness, df$diagnosis)
+#d<-(describeBy(df$Mean_Thickness, df$diagnosis)) 
+```
+# Group difference plot
+```{r}
+ggplot(df, aes (y=Mean_Thickness, x=diagnosis, fill= diagnosis, alpha=diagnosis)) +
+  geom_boxplot(varwidth = T, outlier.shape = 1)+
+  theme_minimal() +
+  labs(colour = "Group", y= "Mean Cortical Thickness", x= "Group") +
+  theme(text=element_text(family="Times New Roman", face="bold", size=16)) + #Times New Roman, 12pt, Bold
+  scale_fill_manual(values=c("Controls" =  "grey65" ,  "MCI" ="mediumturquoise", "Dementia"="lightslateblue")) +
+  scale_alpha_manual(values=c(0.3,0.3,0.3))
+```
+# Linear regression
+```{r}
+summary(lm(Mean_Thickness ~ diagnosis, data = df))
+s3 <- lm(Mean_Thickness ~ diagnosis, data = df)
+confint(s3)
+rm(s3)
+```
+# Linear regression - adjusted
+```{r}
+summary(lm(Mean_Thickness ~ diagnosis + age + gender, data = df))
+s4 <- lm(Mean_Thickness ~ diagnosis + age + gender, data = df)
+confint(s4)
+anova(lm(Mean_Thickness ~ diagnosis + age + gender, data = df))
+rm(s4)
+```
+## Post- hoc tests
+```{r}
+TukeyHSD(aov(Mean_Thickness ~ diagnosis, data = df))
+```
+#----------------------------------------------
+# - - - Regional analysis - - -
+#----------------------------------------------
+# - Proportional of outliers in each group
+#Create long format data.frame with outlier count by ROI and per diagnosis. 
+Can use absolute count or relative proportion within diagnosis proportion. Comment out below accordingly
+```{r paged.print=FALSE}
+## absolute outlier count per diagnosis
+# df.outliers <- as.data.frame(t(sapply(X = df[,grep("_bin", names(df),value = T)], FUN = function(x) table(x, df$diagnosis)[2,])))
+
+## relative outlier count per diagnosis
+df.outliers <- as.data.frame(t(sapply(X = df[,grep("_bin", names(df),value = T)], FUN = function(x) prop.table(table(x, df$diagnosis), margin = 2)[2,])))
+
+df.outliers$Controls <- df.outliers$Controls*100
+df.outliers$MCI <- df.outliers$MCI*100
+df.outliers$Dementia <- df.outliers$Dementia*100
+```
+## write csv
+```{r}
+df.outlierstable <- df.outliers
+
+df.outlierstable <- tibble::rownames_to_column(df.outlierstable, "ROI")
+
+df.outlierstable$ROI <- gsub("_bin", "", df.outlierstable$ROI) #remove the unwanted "_bin"
+
+df.outlierstable$ROI <- gsub("_", " ", df.outlierstable$ROI) #remove the unwanted "_"
+
+write.csv (df.outlierstable, '~/OneDrive - University College London/Chapter 2 cross sectional AD/ADNI_project/Full_study/Results/z_score_stats/relative_outliers.csv')
+
+rm(df.outlierstable)
+```
+# - Differences of outliers in each group (using ANOVA)
+```{r paged.print=FALSE}
+df.stats <- as.data.frame(sapply(X = df[,grep("_bin", names(df),value = T)], FUN = function(x) summary(aov(x ~ df$diagnosis))[[1]][["Pr(>F)"]][1]))
+names(df.stats) <- "p_value"
+setDT(df.stats, keep.rownames = "ROI")
+head(df.stats, 20)
+```
+#FDR correction
+```{r}
+df.stats <- cbind(df.stats, p.adjust(df.stats$p_value), method = "fdr")
+names(df.stats)[3] <- "FDR.pvalue"
+head(df.stats)
+```
+#ANOVA and f_stats 
+```{r}
+df.f_stats <- as.data.frame(sapply(X = df[,grep("_bin", names(df),value = T)], FUN = function(x) summary(aov(x ~ df$diagnosis))[[1]][["F value"]][1]))
+names(df.f_stats) <- "f_stat"
+setDT(df.f_stats, keep.rownames = "ROI")
+head(df.f_stats, 20)
+```
+#ROIs significant post FDR correction
+There are `r length(which(df.stats$FDR.pvalue <0.05))` corrected ROIs that remain significant.
+```{r paged.print=FALSE}
+df.stats[which(df.stats$FDR.pvalue <0.05),]
+```
+# Plots
+Plot left and right separately. Values a 1-p_value, so higher bars are more significant.
+```{r fig.width=20}
+left.stat.plot <- ggplot(df.stats[grep("L_",df.stats$ROI),], aes(x=ROI, y=1-p_value)) + 
+  geom_bar(position="dodge", stat="identity", fill="firebrick") + 
+  theme_cowplot() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+right.stat.plot <- ggplot(df.stats[grep("R_",df.stats$ROI),], aes(x=ROI, y=1-p_value)) + 
+  geom_bar(position="dodge", stat="identity", fill="dodgerblue") + 
+  theme_cowplot() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+plot_grid(left.stat.plot, right.stat.plot, labels = "AUTO", nrow = 2)
+
+rm(left.stat.plot,right.stat.plot)
+```
+#- Differences of outliers in each group (using t-tests)
+# 1. Controls vs Dementia t-test
+```{r}
+# df.CD.stats <- df[grep("Controls|Dementia", df$diagnosis), ] 
+# df.CD.stats <- as.data.frame(sapply(df.CD.stats[,grep("_bin", names(df.CD.stats),value = T)], function(x) t.test(x ~ df.CD.stats$diagnosis)$p.value)) 
+# names(df.CD.stats) <- "p_value"
+# setDT(df.CD.stats, keep.rownames = "ROI")
+# head(df.CD.stats, 20)
+# 
+# #FDR correction
+# df.CD.stats <- cbind(df.CD.stats, p.adjust(df.CD.stats$p_value), method = "fdr")
+# names(df.CD.stats)[3] <- "FDR.pvalue"
+# head(df.CD.stats)
+# 
+# #ROIs that are significant after FDR correction. There are `r length(which(df.stats$FDR.pvalue <0.05))` corrected ROIs that remain significant.
+# df.CD.stats[which(df.CD.stats$FDR.pvalue <0.05),]
+# df_CD_to_edit <- df.CD.stats[which(df.CD.stats$FDR.pvalue <0.05),]
+```
+# 2. MCI vs Dementia t-test
+```{r}
+# df.MD.stats <- df[grep("MCI|Dementia", df$diagnosis), ] 
+# df.MD.stats <- as.data.frame(sapply(df.MD.stats[,grep("_bin", names(df.MD.stats),value = T)], function(x) t.test(x ~ df.MD.stats$diagnosis)$p.value))
+# 
+# names(df.MD.stats) <- "p_value"
+# setDT(df.MD.stats, keep.rownames = "ROI")
+# head(df.MD.stats, 20)
+# 
+# #FDR correction
+# df.MD.stats <- cbind(df.MD.stats, p.adjust(df.MD.stats$p_value), method = "fdr")
+# names(df.MD.stats)[3] <- "FDR.pvalue"
+# head(df.MD.stats)
+# 
+# #ROIs that are significant after FDR correction. There are `r length(which(df.stats$FDR.pvalue <0.05))` corrected ROIs that remain significant.
+# df.MD.stats[which(df.MD.stats$FDR.pvalue <0.05),]
+# df_MD_to_edit <- df.MD.stats[which(df.MD.stats$FDR.pvalue <0.05),]
+```
+# 3. Controls vs MCI t-test
+```{r}
+# df.CM.stats <- df[grep("Controls|MCI", df$diagnosis), ] 
+# df.CM.stats <- as.data.frame(sapply(df.CM.stats[,grep("_bin", names(df.CM.stats),value = T)], function(x) t.test(x ~ df.CM.stats$diagnosis)$p.value))
+# 
+# names(df.CM.stats) <- "p_value"
+# setDT(df.CM.stats, keep.rownames = "ROI")
+# head(df.CM.stats, 20)
+# 
+# #FDR correction
+# df.CM.stats <- cbind(df.CM.stats, p.adjust(df.CM.stats$p_value), method = "fdr")
+# names(df.CM.stats)[3] <- "FDR.pvalue"
+# head(df.CM.stats)
+# 
+# #ROIs that are significant after FDR correction. There are `r length(which(df.stats$FDR.pvalue <0.05))` corrected ROIs that remain significant.
+# df.CM.stats[which(df.CM.stats$FDR.pvalue <0.05),]
+# df_CM_to_edit <- df.CM.stats[which(df.CM.stats$FDR.pvalue <0.05),]
+```
+
+# - Differences of outliers in each group (using chi2)
+```{r paged.print=FALSE}
+df.stats <- as.data.frame(sapply(X = df[,grep("_bin", names(df),value = T)], FUN = function(x) chisq.test(x, df$diagnosis)$p.value))
+names(df.stats) <- "p_value"
+setDT(df.stats, keep.rownames = "ROI")
+head(df.stats, 20)
+
+#examples
+chisq.test(table(df$L_G.S_cingul.Ant_bin, df$diagnosis))
+chisq.test(df$L_G.S_cingul.Ant_bin, df$diagnosis)
+```
+# 1. Controls vs Dementia chi2
+```{r}
+df.CD.stats <- df[grep("Controls|Dementia", df$diagnosis), ] 
+df.CD.stats <- as.data.frame(sapply(X = df.CD.stats[,grep("_bin", names(df.CD.stats),value = T)], FUN = function(x) chisq.test(x, df.CD.stats$diagnosis)$p.value))
+names(df.CD.stats) <- "p_value"
+setDT(df.CD.stats, keep.rownames = "ROI")
+head(df.CD.stats, 20)
+
+#FDR correction
+df.CD.stats <- cbind(df.CD.stats, p.adjust(df.CD.stats$p_value), method = "fdr")
+names(df.CD.stats)[3] <- "FDR.pvalue"
+head(df.CD.stats)
+
+#ROIs that are significant after FDR correction. There are `r length(which(df.stats$FDR.pvalue <0.05))` corrected ROIs that remain significant.
+df.CD.stats[which(df.CD.stats$FDR.pvalue <0.05),]
+df_CD_to_edit <- df.CD.stats[which(df.CD.stats$FDR.pvalue <0.05),]
+
+```
+
+# 2. MCI vs Dementia chi2
+```{r}
+df.MD.stats <- df[grep("MCI|Dementia", df$diagnosis), ] 
+df.MD.stats <- as.data.frame(sapply(X = df.MD.stats[,grep("_bin", names(df.MD.stats),value = T)], FUN = function(x) chisq.test(x, df.MD.stats$diagnosis)$p.value))
+names(df.MD.stats) <- "p_value"
+setDT(df.MD.stats, keep.rownames = "ROI")
+head(df.MD.stats, 20)
+
+#FDR correction
+df.MD.stats <- cbind(df.MD.stats, p.adjust(df.MD.stats$p_value), method = "fdr")
+names(df.MD.stats)[3] <- "FDR.pvalue"
+head(df.MD.stats)
+
+#ROIs that are significant after FDR correction. There are `r length(which(df.stats$FDR.pvalue <0.05))` corrected ROIs that remain significant.
+df.MD.stats[which(df.MD.stats$FDR.pvalue <0.05),]
+df_MD_to_edit <- df.MD.stats[which(df.MD.stats$FDR.pvalue <0.05),]
+
+```
+# 3. Controls vs MCI chi2
+```{r}
+df.CM.stats <- df[grep("Controls|MCI", df$diagnosis), ] 
+df.CM.stats <- as.data.frame(sapply(X = df.CM.stats[,grep("_bin", names(df.CM.stats),value = T)], FUN = function(x) chisq.test(x, df.CM.stats$diagnosis)$p.value))
+names(df.CM.stats) <- "p_value"
+setDT(df.CM.stats, keep.rownames = "ROI")
+head(df.CM.stats, 20)
+
+#FDR correction
+df.CM.stats <- cbind(df.CM.stats, p.adjust(df.CM.stats$p_value), method = "fdr")
+names(df.CM.stats)[3] <- "FDR.pvalue"
+head(df.CM.stats)
+
+#ROIs that are significant after FDR correction. There are `r length(which(df.stats$FDR.pvalue <0.05))` corrected ROIs that remain significant.
+df.CM.stats[which(df.CM.stats$FDR.pvalue <0.05),]
+df_CM_to_edit <- df.CM.stats[which(df.CM.stats$FDR.pvalue <0.05),]
+
+```
+
+#----------------------------------------------
+# - - - Distance measures - - -
+#----------------------------------------------
+# - Outlier matrix plots
+#X is ROI and Y is subject. Highlights outliers.
+## Controls
+```{r fig.width=12}
+## using binerised z -scores
+controls_bin.mat <- as.matrix(df %>% filter(diagnosis == "Controls") %>%
+  select(contains("_bin")))
+#plot(controls_bin.mat, asp = F, border = NA)
+```
+## MCI
+```{r fig.width=12}
+## using binerised z -scores
+MCI_bin.mat <- as.matrix(df %>% filter(diagnosis == "MCI") %>%
+  select(contains("_bin")))
+#plot(MCI_bin.mat, asp = F, border = NA)
+```
+## AD
+```{r fig.width=12}
+# using binerised z -scores
+AD_bin.mat <- as.matrix(df %>% filter(diagnosis == "Dementia") %>%
+  select(contains("_bin")))
+#plot(AD_bin.mat, asp = F, border = NA)
+```
+# - Hamming distance matrix
+Each cell is the Hamming distance between the binary (see above) vectors of each subject, based on pairwise comparisons.
+## Control distances
+```{r fig.width=12}
+#plot(hamming.distance(controls_bin.mat), border = NA)
+controls_hamming <- hamming.distance(controls_bin.mat)
+write.csv(controls_hamming, "controls_hamming.csv")
+```
+## MCI distances
+```{r fig.width=20}
+#plot (hamming.distance(MCI_bin.mat), border = NA)
+MCI_hamming <- hamming.distance(MCI_bin.mat)
+write.csv(MCI_hamming, "MCI_hamming.csv")
+```
+## AD distances
+```{r}
+#plot(hamming.distance(AD_bin.mat), border = NA)
+AD_hamming <- hamming.distance(AD_bin.mat)
+write.csv(AD_hamming, "AD_hamming.csv")
+```
+# Mean, median and standard deviation of Hamming distances
+## Controls
+```{r}
+mean(hamming.distance(controls_bin.mat))
+median(hamming.distance(controls_bin.mat))
+sd(hamming.distance(controls_bin.mat))
+```
+## MCI
+```{r}
+mean(hamming.distance(MCI_bin.mat))
+median(hamming.distance(MCI_bin.mat))
+sd(hamming.distance(MCI_bin.mat))
+```
+## AD 
+```{r}
+mean(hamming.distance(AD_bin.mat))
+median(hamming.distance(AD_bin.mat))
+sd(hamming.distance(AD_bin.mat))
+```
+
+
+# - Plotting Hamming distance frequency density plot
+```{r}
+# Calculate density
+dc <- density(controls_hamming)
+dm <- density(MCI_hamming)
+da <- density(AD_hamming)
+
+# Prepare data
+controls_hamming_g <- as.data.frame(controls_hamming)
+controls_hamming_g <-gather(controls_hamming_g)
+controls_hamming_g$a1 <-  c("Controls")
+
+MCI_hamming_g <- as.data.frame(MCI_hamming)
+MCI_hamming_g <-gather(MCI_hamming_g)
+MCI_hamming_g$a1 <-  c("MCI")
+
+AD_hamming_g <- as.data.frame(AD_hamming)
+AD_hamming_g <-gather(AD_hamming_g)
+AD_hamming_g$a1 <-  c("AD")
+
+
+hamming_all <- rbind(controls_hamming_g,MCI_hamming_g,AD_hamming_g) #combine datasets
+rm(controls_hamming_g,MCI_hamming_g,AD_hamming_g) #remove dfs
+hamming_all <- hamming_all %>% dplyr::rename("Dissimilarity" = "value")
+hamming_all <- hamming_all %>% dplyr::rename("diagnosis" = "a1")
+
+
+hamming_all$diagnosis <- as.factor(hamming_all$diagnosis)
+
+
+## using friendly colours 
+p <-  ggplot(hamming_all, aes(x=Dissimilarity, fill = diagnosis , colour= diagnosis)) +
+  geom_density(adjust = 2,alpha=0.3)
+colours=c("Controls" =  "grey65" ,  "MCI" ="mediumturquoise", "AD"="lightslateblue")
+p + scale_color_manual (values=colours)+
+ scale_fill_manual (values=colours) +
+  labs(y= "Density", x= "Dissimilarity") +
+  theme(text=element_text(family="Times New Roman", face="bold", size=16)) + #Times New Roman, 12pt, Bold
+  theme_light()
+
+rm(dc,dm,da,p)
+```
+# Hamming Dissimilarity - subject medians (median of each column)
+##Controls
+```{r paged.print=FALSE}
+controls_hamming <- as.data.frame(controls_hamming) #change format
+
+#work out medians
+M_controls_hamming <- 
+  controls_hamming %>%
+  summarise(across(V1:V159, ~ median(.x, na.rm = TRUE)))
+            
+V1check <- median(controls_hamming$V1) #check if calculated medians okay
+
+# create df of medians
+M_controls_hamming <-gather(M_controls_hamming)
+M_controls_hamming$key <-  c("Controls")
+M_controls_hamming <-M_controls_hamming %>% dplyr::rename(diagnosis= key) #rename col
+M_controls_hamming <-M_controls_hamming %>% dplyr::rename(Hamming_median= value) #rename col
+```
+##MCI
+```{r paged.print=FALSE}
+MCI_hamming <- as.data.frame(MCI_hamming) #change format
+
+#work out medians
+M_MCI_hamming <- 
+  MCI_hamming %>%
+  summarise(across(V1:V662, ~ median(.x, na.rm = TRUE)))
+            
+V1check <- median(MCI_hamming$V1) #check if calculated medians okay
+
+# create df of medians
+M_MCI_hamming <-gather(M_MCI_hamming)
+M_MCI_hamming$key <-  c("MCI")
+M_MCI_hamming <-M_MCI_hamming %>% dplyr::rename(diagnosis= key) #rename col
+M_MCI_hamming <-M_MCI_hamming %>% dplyr::rename(Hamming_median= value) #rename col
+
+
+
+
+```
+##AD
+```{r paged.print=FALSE}
+AD_hamming <- as.data.frame(AD_hamming) #change format
+
+#work out medians
+M_AD_hamming <- 
+  AD_hamming %>%
+  summarise(across(V1:V206, ~ median(.x, na.rm = TRUE)))
+            
+V1check <- median(AD_hamming$V1) #check if calculated medians okay
+
+# create df of medians
+M_AD_hamming <-gather(M_AD_hamming)
+M_AD_hamming$key <-  c("AD")
+M_AD_hamming <-M_AD_hamming %>% dplyr::rename(diagnosis= key) #rename col
+M_AD_hamming <-M_AD_hamming %>% dplyr::rename(Hamming_median= value) #rename col
+```
+
+## create a seperate df
+```{r paged.print=FALSE}
+subject_medians <- rbind(M_controls_hamming,M_MCI_hamming,M_AD_hamming)
+rm(M_controls_hamming,M_MCI_hamming,M_AD_hamming,V1check)
+
+```
+# Hamming subject median summary
+```{r paged.print=FALSE}
+describeBy(subject_medians$Hamming_median, subject_medians$diagnosis, IQR = T)
+```
+# Hamming subject median linear regression
+```{r}
+#summary(lm(Hamming_median ~ diagnosis, data = subject_medians))
+#s5 <- lm(Hamming_median ~ diagnosis, data = subject_medians)
+anova(lm(Hamming_median ~ diagnosis, data = subject_medians))
+#confint(s5)
+#rm(s5)
+TukeyHSD(aov(Hamming_median ~ diagnosis, data = subject_medians))
+```
+
+#-------------------------------------------------
+# - - - Plotting outliers on brain surfaces: significant differences - - -
+#-------------------------------------------------
+# ANOVA - all groups
+##Convert existing data to desterieux atlas
+```{r}
+left.df.stats <- df.stats %>%
+  filter(str_detect(ROI, "L_"))
+x <- gsub("L_", "", left.df.stats$ROI)
+y <- gsub("G.S_", "G and S ", x)
+z <- gsub("G_", "G ", y)
+z1 <- gsub("S_", "S ", z)
+z2 <- gsub("_", " ", z1)
+z3 <- gsub(" bin", "", z2)
+z4 <- gsub("\\.", " ", z3)
+z5 <- gsub("cingul ", "cingul-", z4)
+z6 <- gsub("Mid ", "Mid-", z5)
+z7 <- gsub("Post ", "Post-", z6)
+z8 <- gsub("inf ", "inf-", z7)
+z9 <- gsub("med ", "med-", z8)
+z10 <- gsub("sup ", "sup-", z9)
+z11 <- gsub("Fis ant ", "Fis-ant-", z10)
+z12 <- gsub("precentral ", "precentral-", z11)
+z13 <- gsub("Fis pos ", "Fis-pos-", z12)
+z14 <- gsub("lg S", "lg and S", z13)
+z15 <- gsub("oc temp", "oc-temp", z14)
+z16 <- gsub("sup and transversal", "sup-transversal", z15)
+z17 <- gsub("orbital H Shaped", "orbital-H Shaped", z16)
+z18 <- gsub("oc sup-transversal", "oc sup and transversal", z17)
+z19 <- gsub("prim Jensen", "prim-Jensen", z18)
+z20 <- gsub("S oc-temp med-Lingual", "S oc-temp med and Lingual", z19)
+z21 <- gsub("lat fusifor", "lat-fusifor", z20)
+z22 <- gsub("middle Lunatus", "middle and Lunatus", z21)
+z23 <- gsub("intrapariet P trans", "intrapariet and P trans", z22)
+renamed_ROIs <- gsub("Lat Fis post", "Lat Fis-post", z23)
+
+desterieux_ROIs <- as.data.frame(desterieux %>% filter(hemi == "left"))$region
+compare_lists <- cbind(sort(renamed_ROIs), sort(unique(desterieux_ROIs)))
+list_matches <- compare_lists[,1] %in% compare_lists[,2]
+compare_lists[!list_matches,]
+
+## if no mismatches, than add to data.frame as region
+left.df.stats$region <- renamed_ROIs
+
+right.df.stats <- df.stats %>%
+  filter(str_detect(ROI, "R_"))
+x <- gsub("R_", "", right.df.stats$ROI)
+y <- gsub("G.S_", "G and S ", x)
+z <- gsub("G_", "G ", y)
+z1 <- gsub("S_", "S ", z)
+z2 <- gsub("_", " ", z1)
+z3 <- gsub(" bin", "", z2)
+z4 <- gsub("\\.", " ", z3)
+z5 <- gsub("cingul ", "cingul-", z4)
+z6 <- gsub("Mid ", "Mid-", z5)
+z7 <- gsub("Post ", "Post-", z6)
+z8 <- gsub("inf ", "inf-", z7)
+z9 <- gsub("med ", "med-", z8)
+z10 <- gsub("sup ", "sup-", z9)
+z11 <- gsub("Fis ant ", "Fis-ant-", z10)
+z12 <- gsub("precentral ", "precentral-", z11)
+z13 <- gsub("Fis pos ", "Fis-pos-", z12)
+z14 <- gsub("lg S", "lg and S", z13)
+z15 <- gsub("oc temp", "oc-temp", z14)
+z16 <- gsub("sup and transversal", "sup-transversal", z15)
+z17 <- gsub("orbital H Shaped", "orbital-H Shaped", z16)
+z18 <- gsub("oc sup-transversal", "oc sup and transversal", z17)
+z19 <- gsub("prim Jensen", "prim-Jensen", z18)
+z20 <- gsub("S oc-temp med-Lingual", "S oc-temp med and Lingual", z19)
+z21 <- gsub("lat fusifor", "lat-fusifor", z20)
+z22 <- gsub("middle Lunatus", "middle and Lunatus", z21)
+z23 <- gsub("intrapariet P trans", "intrapariet and P trans", z22)
+renamed_ROIs <- gsub("Lat Fis post", "Lat Fis-post", z23)
+
+desterieux_ROIs <- as.data.frame(desterieux %>% filter(hemi == "right"))$region
+compare_lists <- cbind(sort(renamed_ROIs), sort(unique(desterieux_ROIs)))
+list_matches <- compare_lists[,1] %in% compare_lists[,2]
+compare_lists[!list_matches,]
+
+## if no mismatches, than add to data.frame as region
+right.df.stats$region <- renamed_ROIs
+
+
+```
+## Plot FDR-correct p-values (0-0.06) ANOVA
+```{r message=FALSE}
+#                            
+# left_pvalues <- ggseg(.data=left.df.stats, atlas = desterieux, mapping=aes(fill=FDR.pvalue), hemisphere = "left", colour = "white", size = 0.2) + 
+# scale_fill_gradientn(limits = c(0,0.05), colours =  rainbow.colors(5))
+# 
+# right_pvalues <- ggseg(.data=right.df.stats, atlas = desterieux, mapping=aes(fill=FDR.pvalue), hemisphere = "right", colour = "white", size = 0.2) +
+#   scale_fill_gradientn(limits = c(0,0.05), colours = rainbow.colors(5))
+# 
+# plot_grid(left_pvalues,right_pvalues, nrow = 2, labels = "AUTO")
+# rm(left_pvalues,right_pvalues)
+# 
+# ggsave("~/OneDrive - University College London/Chapter 2 cross sectional AD/ADNI_project/Full_study/Results/z_score_stats/anovamap.pdf")
+
+```
+# 1. Controls vs Dementia
+##Convert existing data to desterieux atlas
+```{r}
+left.df.CD.stats <- df.CD.stats %>%
+  filter(str_detect(ROI, "L_"))
+x <- gsub("L_", "", left.df.CD.stats$ROI)
+y <- gsub("G.S_", "G and S ", x)
+z <- gsub("G_", "G ", y)
+z1 <- gsub("S_", "S ", z)
+z2 <- gsub("_", " ", z1)
+z3 <- gsub(" bin", "", z2)
+z4 <- gsub("\\.", " ", z3)
+z5 <- gsub("cingul ", "cingul-", z4)
+z6 <- gsub("Mid ", "Mid-", z5)
+z7 <- gsub("Post ", "Post-", z6)
+z8 <- gsub("inf ", "inf-", z7)
+z9 <- gsub("med ", "med-", z8)
+z10 <- gsub("sup ", "sup-", z9)
+z11 <- gsub("Fis ant ", "Fis-ant-", z10)
+z12 <- gsub("precentral ", "precentral-", z11)
+z13 <- gsub("Fis pos ", "Fis-pos-", z12)
+z14 <- gsub("lg S", "lg and S", z13)
+z15 <- gsub("oc temp", "oc-temp", z14)
+z16 <- gsub("sup and transversal", "sup-transversal", z15)
+z17 <- gsub("orbital H Shaped", "orbital-H Shaped", z16)
+z18 <- gsub("oc sup-transversal", "oc sup and transversal", z17)
+z19 <- gsub("prim Jensen", "prim-Jensen", z18)
+z20 <- gsub("S oc-temp med-Lingual", "S oc-temp med and Lingual", z19)
+z21 <- gsub("lat fusifor", "lat-fusifor", z20)
+z22 <- gsub("middle Lunatus", "middle and Lunatus", z21)
+z23 <- gsub("intrapariet P trans", "intrapariet and P trans", z22)
+renamed_ROIs <- gsub("Lat Fis post", "Lat Fis-post", z23)
+
+desterieux_ROIs <- as.data.frame(desterieux %>% filter(hemi == "left"))$region
+compare_lists <- cbind(sort(renamed_ROIs), sort(unique(desterieux_ROIs)))
+list_matches <- compare_lists[,1] %in% compare_lists[,2]
+compare_lists[!list_matches,]
+## if no mismatches, than add to data.frame as region
+left.df.CD.stats$region <- renamed_ROIs
+
+right.df.CD.stats <- df.CD.stats %>%
+  filter(str_detect(ROI, "R_"))
+x <- gsub("R_", "", right.df.CD.stats$ROI)
+y <- gsub("G.S_", "G and S ", x)
+z <- gsub("G_", "G ", y)
+z1 <- gsub("S_", "S ", z)
+z2 <- gsub("_", " ", z1)
+z3 <- gsub(" bin", "", z2)
+z4 <- gsub("\\.", " ", z3)
+z5 <- gsub("cingul ", "cingul-", z4)
+z6 <- gsub("Mid ", "Mid-", z5)
+z7 <- gsub("Post ", "Post-", z6)
+z8 <- gsub("inf ", "inf-", z7)
+z9 <- gsub("med ", "med-", z8)
+z10 <- gsub("sup ", "sup-", z9)
+z11 <- gsub("Fis ant ", "Fis-ant-", z10)
+z12 <- gsub("precentral ", "precentral-", z11)
+z13 <- gsub("Fis pos ", "Fis-pos-", z12)
+z14 <- gsub("lg S", "lg and S", z13)
+z15 <- gsub("oc temp", "oc-temp", z14)
+z16 <- gsub("sup and transversal", "sup-transversal", z15)
+z17 <- gsub("orbital H Shaped", "orbital-H Shaped", z16)
+z18 <- gsub("oc sup-transversal", "oc sup and transversal", z17)
+z19 <- gsub("prim Jensen", "prim-Jensen", z18)
+z20 <- gsub("S oc-temp med-Lingual", "S oc-temp med and Lingual", z19)
+z21 <- gsub("lat fusifor", "lat-fusifor", z20)
+z22 <- gsub("middle Lunatus", "middle and Lunatus", z21)
+z23 <- gsub("intrapariet P trans", "intrapariet and P trans", z22)
+renamed_ROIs <- gsub("Lat Fis post", "Lat Fis-post", z23)
+
+desterieux_ROIs <- as.data.frame(desterieux %>% filter(hemi == "right"))$region
+compare_lists <- cbind(sort(renamed_ROIs), sort(unique(desterieux_ROIs)))
+list_matches <- compare_lists[,1] %in% compare_lists[,2]
+compare_lists[!list_matches,]
+
+## if no mismatches, than add to data.frame as region
+right.df.CD.stats$region <- renamed_ROIs
+```
+## Plot FDR-correct p-values (0-0.06) using ggseg
+```{r message=FALSE}
+# grey to blue
+left_CD_pvalues <- ggseg(.data=left.df.CD.stats, atlas = desterieux, mapping=aes(fill=FDR.pvalue), hemisphere = "left", colour = "white", size = 0.2) +
+  scale_fill_gradientn(limits = c(0,0.06), colours = c("#332288","darkgrey"))
+
+right_CD_pvalues <- ggseg(.data=right.df.CD.stats, atlas = desterieux, mapping=aes(fill=FDR.pvalue), hemisphere = "right", colour = "white", size = 0.2) +
+  scale_fill_gradientn(limits = c(0,0.06), colours = c("#332288","darkgrey"))
+
+plot_grid(left_CD_pvalues,right_CD_pvalues, nrow = 2, labels = "AUTO")
+
+ggsave("~/OneDrive - University College London/Chapter 2 cross sectional AD/ADNI_project/Full_study/Results/z_score_stats/ControlsvsDementia.pdf")
+```
+# 2. MCI vs Dementia
+##Convert existing data to desterieux atlas
+```{r}
+left.df.MD.stats <- df.MD.stats %>%
+  filter(str_detect(ROI, "L_"))
+x <- gsub("L_", "", left.df.MD.stats$ROI)
+y <- gsub("G.S_", "G and S ", x)
+z <- gsub("G_", "G ", y)
+z1 <- gsub("S_", "S ", z)
+z2 <- gsub("_", " ", z1)
+z3 <- gsub(" bin", "", z2)
+z4 <- gsub("\\.", " ", z3)
+z5 <- gsub("cingul ", "cingul-", z4)
+z6 <- gsub("Mid ", "Mid-", z5)
+z7 <- gsub("Post ", "Post-", z6)
+z8 <- gsub("inf ", "inf-", z7)
+z9 <- gsub("med ", "med-", z8)
+z10 <- gsub("sup ", "sup-", z9)
+z11 <- gsub("Fis ant ", "Fis-ant-", z10)
+z12 <- gsub("precentral ", "precentral-", z11)
+z13 <- gsub("Fis pos ", "Fis-pos-", z12)
+z14 <- gsub("lg S", "lg and S", z13)
+z15 <- gsub("oc temp", "oc-temp", z14)
+z16 <- gsub("sup and transversal", "sup-transversal", z15)
+z17 <- gsub("orbital H Shaped", "orbital-H Shaped", z16)
+z18 <- gsub("oc sup-transversal", "oc sup and transversal", z17)
+z19 <- gsub("prim Jensen", "prim-Jensen", z18)
+z20 <- gsub("S oc-temp med-Lingual", "S oc-temp med and Lingual", z19)
+z21 <- gsub("lat fusifor", "lat-fusifor", z20)
+z22 <- gsub("middle Lunatus", "middle and Lunatus", z21)
+z23 <- gsub("intrapariet P trans", "intrapariet and P trans", z22)
+renamed_ROIs <- gsub("Lat Fis post", "Lat Fis-post", z23)
+
+desterieux_ROIs <- as.data.frame(desterieux %>% filter(hemi == "left"))$region
+compare_lists <- cbind(sort(renamed_ROIs), sort(unique(desterieux_ROIs)))
+list_matches <- compare_lists[,1] %in% compare_lists[,2]
+compare_lists[!list_matches,]
+## if no mismatches, than add to data.frame as region
+left.df.MD.stats$region <- renamed_ROIs
+
+right.df.MD.stats <- df.MD.stats %>%
+  filter(str_detect(ROI, "R_"))
+x <- gsub("R_", "", right.df.MD.stats$ROI)
+y <- gsub("G.S_", "G and S ", x)
+z <- gsub("G_", "G ", y)
+z1 <- gsub("S_", "S ", z)
+z2 <- gsub("_", " ", z1)
+z3 <- gsub(" bin", "", z2)
+z4 <- gsub("\\.", " ", z3)
+z5 <- gsub("cingul ", "cingul-", z4)
+z6 <- gsub("Mid ", "Mid-", z5)
+z7 <- gsub("Post ", "Post-", z6)
+z8 <- gsub("inf ", "inf-", z7)
+z9 <- gsub("med ", "med-", z8)
+z10 <- gsub("sup ", "sup-", z9)
+z11 <- gsub("Fis ant ", "Fis-ant-", z10)
+z12 <- gsub("precentral ", "precentral-", z11)
+z13 <- gsub("Fis pos ", "Fis-pos-", z12)
+z14 <- gsub("lg S", "lg and S", z13)
+z15 <- gsub("oc temp", "oc-temp", z14)
+z16 <- gsub("sup and transversal", "sup-transversal", z15)
+z17 <- gsub("orbital H Shaped", "orbital-H Shaped", z16)
+z18 <- gsub("oc sup-transversal", "oc sup and transversal", z17)
+z19 <- gsub("prim Jensen", "prim-Jensen", z18)
+z20 <- gsub("S oc-temp med-Lingual", "S oc-temp med and Lingual", z19)
+z21 <- gsub("lat fusifor", "lat-fusifor", z20)
+z22 <- gsub("middle Lunatus", "middle and Lunatus", z21)
+z23 <- gsub("intrapariet P trans", "intrapariet and P trans", z22)
+renamed_ROIs <- gsub("Lat Fis post", "Lat Fis-post", z23)
+
+desterieux_ROIs <- as.data.frame(desterieux %>% filter(hemi == "right"))$region
+compare_lists <- cbind(sort(renamed_ROIs), sort(unique(desterieux_ROIs)))
+list_matches <- compare_lists[,1] %in% compare_lists[,2]
+compare_lists[!list_matches,]
+
+## if no mismatches, than add to data.frame as region
+right.df.MD.stats$region <- renamed_ROIs
+
+```
+## Plot FDR-correct p-values (0-0.06) using ggseg
+```{r message=FALSE}
+# grey to red
+left_MD_pvalues <- ggseg(.data=left.df.MD.stats, atlas = desterieux, mapping=aes(fill=FDR.pvalue), hemisphere = "left", colour = "white", size = 0.2) +
+  scale_fill_gradientn(limits = c(0,0.06), colours = c("#332288","darkgrey"))
+
+right_MD_pvalues <- ggseg(.data=right.df.MD.stats, atlas = desterieux, mapping=aes(fill=FDR.pvalue), hemisphere = "right", colour = "white", size = 0.2) +
+  scale_fill_gradientn(limits = c(0,0.06), colours = c("#332288","darkgrey"))
+
+plot_grid(left_MD_pvalues,right_MD_pvalues, nrow = 2, labels = "AUTO")
+ggsave("~/OneDrive - University College London/Chapter 2 cross sectional AD/ADNI_project/Full_study/Results/z_score_stats/MCIvsDementia.pdf")
+
+```
+# 3. Controls vs MCI
+#Convert existing data to desterieux atlas
+```{r}
+left.df.CM.stats <- df.CM.stats %>%
+  filter(str_detect(ROI, "L_"))
+x <- gsub("L_", "", left.df.CM.stats$ROI)
+y <- gsub("G.S_", "G and S ", x)
+z <- gsub("G_", "G ", y)
+z1 <- gsub("S_", "S ", z)
+z2 <- gsub("_", " ", z1)
+z3 <- gsub(" bin", "", z2)
+z4 <- gsub("\\.", " ", z3)
+z5 <- gsub("cingul ", "cingul-", z4)
+z6 <- gsub("Mid ", "Mid-", z5)
+z7 <- gsub("Post ", "Post-", z6)
+z8 <- gsub("inf ", "inf-", z7)
+z9 <- gsub("med ", "med-", z8)
+z10 <- gsub("sup ", "sup-", z9)
+z11 <- gsub("Fis ant ", "Fis-ant-", z10)
+z12 <- gsub("precentral ", "precentral-", z11)
+z13 <- gsub("Fis pos ", "Fis-pos-", z12)
+z14 <- gsub("lg S", "lg and S", z13)
+z15 <- gsub("oc temp", "oc-temp", z14)
+z16 <- gsub("sup and transversal", "sup-transversal", z15)
+z17 <- gsub("orbital H Shaped", "orbital-H Shaped", z16)
+z18 <- gsub("oc sup-transversal", "oc sup and transversal", z17)
+z19 <- gsub("prim Jensen", "prim-Jensen", z18)
+z20 <- gsub("S oc-temp med-Lingual", "S oc-temp med and Lingual", z19)
+z21 <- gsub("lat fusifor", "lat-fusifor", z20)
+z22 <- gsub("middle Lunatus", "middle and Lunatus", z21)
+z23 <- gsub("intrapariet P trans", "intrapariet and P trans", z22)
+renamed_ROIs <- gsub("Lat Fis post", "Lat Fis-post", z23)
+
+desterieux_ROIs <- as.data.frame(desterieux %>% filter(hemi == "left"))$region
+compare_lists <- cbind(sort(renamed_ROIs), sort(unique(desterieux_ROIs)))
+list_matches <- compare_lists[,1] %in% compare_lists[,2]
+compare_lists[!list_matches,]
+## if no mismatches, than add to data.frame as region
+left.df.CM.stats$region <- renamed_ROIs
+
+right.df.CM.stats <- df.CM.stats %>%
+  filter(str_detect(ROI, "R_"))
+x <- gsub("R_", "", right.df.CM.stats$ROI)
+y <- gsub("G.S_", "G and S ", x)
+z <- gsub("G_", "G ", y)
+z1 <- gsub("S_", "S ", z)
+z2 <- gsub("_", " ", z1)
+z3 <- gsub(" bin", "", z2)
+z4 <- gsub("\\.", " ", z3)
+z5 <- gsub("cingul ", "cingul-", z4)
+z6 <- gsub("Mid ", "Mid-", z5)
+z7 <- gsub("Post ", "Post-", z6)
+z8 <- gsub("inf ", "inf-", z7)
+z9 <- gsub("med ", "med-", z8)
+z10 <- gsub("sup ", "sup-", z9)
+z11 <- gsub("Fis ant ", "Fis-ant-", z10)
+z12 <- gsub("precentral ", "precentral-", z11)
+z13 <- gsub("Fis pos ", "Fis-pos-", z12)
+z14 <- gsub("lg S", "lg and S", z13)
+z15 <- gsub("oc temp", "oc-temp", z14)
+z16 <- gsub("sup and transversal", "sup-transversal", z15)
+z17 <- gsub("orbital H Shaped", "orbital-H Shaped", z16)
+z18 <- gsub("oc sup-transversal", "oc sup and transversal", z17)
+z19 <- gsub("prim Jensen", "prim-Jensen", z18)
+z20 <- gsub("S oc-temp med-Lingual", "S oc-temp med and Lingual", z19)
+z21 <- gsub("lat fusifor", "lat-fusifor", z20)
+z22 <- gsub("middle Lunatus", "middle and Lunatus", z21)
+z23 <- gsub("intrapariet P trans", "intrapariet and P trans", z22)
+renamed_ROIs <- gsub("Lat Fis post", "Lat Fis-post", z23)
+
+desterieux_ROIs <- as.data.frame(desterieux %>% filter(hemi == "right"))$region
+compare_lists <- cbind(sort(renamed_ROIs), sort(unique(desterieux_ROIs)))
+list_matches <- compare_lists[,1] %in% compare_lists[,2]
+compare_lists[!list_matches,]
+
+## if no mismatches, than add to data.frame as region
+right.df.CM.stats$region <- renamed_ROIs
+```
+## Plot FDR-correct p-values (0-0.06) using ggseg
+```{r message=FALSE}
+left_CM_pvalues <- ggseg(.data=left.df.CM.stats, atlas = desterieux, mapping=aes(fill=FDR.pvalue), hemisphere = "left", colour = "white", size = 0.2) +
+  scale_fill_gradientn(limits = c(0,0.06), colours = c("#332288","darkgrey"))
+
+right_CM_pvalues <- ggseg(.data=right.df.CM.stats, atlas = desterieux, mapping=aes(fill=FDR.pvalue), hemisphere = "right", colour = "white", size = 0.2) +
+  scale_fill_gradientn(limits = c(0,0.06), colours = c("#332288","darkgrey"))
+
+plot_grid(left_CM_pvalues,right_CM_pvalues, nrow = 2, labels = "AUTO")
+
+ggsave("~/OneDrive - University College London/Chapter 2 cross sectional AD/ADNI_project/Full_study/Results/z_score_stats/ControlsvsMCI.pdf")
+```
+
+#-------------------------------------------------
+# - - - Plotting outliers on brain surfaces: proportional % - - -
+#-------------------------------------------------
+##Convert existing data to desterieux atlas
+```{r}
+df.outliers$region <- renamed_ROIs
+df.outliers <- df.outliers %>% mutate(hemi = ifelse(str_detect(row.names(df.outliers), "^L"), "left", "right"))
+```
+# Plot outliers proportional to group 2.5 to 1 (rainbow)
+```{r}
+con_brain <- ggseg(.data=df.outliers, atlas = desterieux, mapping=aes(fill=Controls), colour = "white", size = 0.1) +
+scale_fill_gradientn(limits = c(2.5,100), colours = rev(rainbow.colors(5)), labs(title="Controls"))
+
+mci_brain <- ggseg(.data=df.outliers, atlas = desterieux, mapping=aes(fill=MCI), colour = "white", size = 0.1) + scale_fill_gradientn(limits = c(2.5,100), colours = rev(rainbow.colors(5)), labs(title="MCI"))
+
+ad_brain <- ggseg(.data=df.outliers, atlas = desterieux, mapping=aes(fill=Dementia), colour = "white", size = 0.1) + scale_fill_gradientn(limits = c(2.5,100), colours = rev(rainbow.colors(5)), labs(title="AD"))
+
+plot_grid(con_brain, mci_brain, ad_brain, nrow = 3, labels = "AUTO")
+rm(con_brain, mci_brain, ad_brain)
+
+ggsave("~/OneDrive - University College London/Chapter 2 cross sectional AD/ADNI_project/Full_study/Results/z_score_stats/proportional_map.pdf")
+```
+#-------------------------------------------------
+# - - - Plotting outliers as a scatter graph: proportional % - - -
+#-------------------------------------------------
+#Prepare the data to plot as a scatter graph
+```{r}
+# remove row headings
+#df.outliers3 <- rownames(df.outliers2) <- NULL   
+
+# make three datasets temp datasets with diagnostic label
+c <- df.outliers[grep("Controls|region|hemi",names (df.outliers))]
+c$proportion <- c$Controls
+c$Controls<- c("Controls") # make new column 
+c <-c %>% dplyr::rename(diagnosis= Controls) #rename col to diagnosis
+
+
+m <- df.outliers[grep("MCI|region|hemi",names (df.outliers))]
+m$proportion <- m$MCI
+m$MCI<- c("MCI") # make new column 
+m <-m %>% dplyr::rename(diagnosis= MCI) #rename col to diagnosis
+
+
+a <- df.outliers[grep("Dementia|region|hemi",names (df.outliers))]
+a$proportion <- a$Dementia
+a$Dementia<- c("AD") # make new column 
+a <- a %>% dplyr::rename(diagnosis= Dementia) #rename col to diagnosis
+
+
+# c bind datasets
+df.outliers3 <- rbind(c,m,a)
+
+# remove unwanted dfs
+rm(c,m,a)
+
+# make into a percentage
+#df.outliers3$proportion <- df.outliers3$proportion*100
+```
+# Plot the  graphs
+```{r fig.width=20}
+left.plot <- ggplot(df.outliers3[grep("left",df.outliers3$hemi),], aes(color=diagnosis, y=proportion, x=region)) + 
+  geom_point(size = 6) +
+  ylim(0, 100) +
+  theme_minimal() +
+  scale_color_manual(values=c("Controls" =  "grey65" ,  "MCI" ="mediumturquoise", "AD"="lightslateblue")) +
+  scale_alpha_manual(values=c(0.3,0.3,0.3)) +
+  theme(axis.text.x = element_text(angle = 90), text=element_text(face="bold", size=20))
+
+right.plot <- ggplot(df.outliers3[grep("right",df.outliers3$hemi),], aes(color=diagnosis, y=proportion, x=region)) + 
+  geom_point(size = 6) +
+  ylim(0, 100) +
+  theme_minimal() +
+  scale_color_manual(values=c("Controls" =  "grey65" ,  "MCI" ="mediumturquoise", "AD"="lightslateblue")) +
+  scale_alpha_manual(values=c(0.3,0.3,0.3))+
+  theme(axis.text.x = element_text(angle = 90), text=element_text(face="bold", size=20))
+
+plot_grid(left.plot, right.plot, labels = "AUTO", nrow = 2)
+```
+# Inverse axis and mirror
+```{r fig.width=20}
+# sort data out in -ve and +ve to split left and right brain hemispheres
+df.outliers4 <- df.outliers3[grep("left",df.outliers3$hemi),]
+df.outliers4$proportion <- df.outliers4$proportion*(-1)
+df.outliers5 <- df.outliers3[grep("right",df.outliers3$hemi),]
+df.outliers4 <- rbind(df.outliers4,df.outliers5)
+
+ggplot(df.outliers4, aes(color=diagnosis, y=proportion, x=region)) + 
+  geom_point(size = 8) +
+  ylim(-100, 100) +
+  theme_minimal() +
+  scale_color_manual(values=c("Controls" =  "grey65" ,  "MCI" ="mediumturquoise", "AD"="lightslateblue")) +
+  scale_alpha_manual(values=c(0.3,0.3,0.3))+
+  theme(text=element_text(face="bold", size=20)) +
+  coord_flip()
+```
+# Inverse axis and mirror
+```{r fig.width=20}
+
+left.plot <- ggplot(df.outliers3[grep("left",df.outliers3$hemi),], aes(color=diagnosis, y=proportion, x=region)) + 
+  geom_point(size = 6) +
+  ylim(0, 100) +
+  theme_minimal() +
+  scale_color_manual(values=c("Controls" =  "grey65" ,  "MCI" ="mediumturquoise", "AD"="lightslateblue")) +
+  scale_alpha_manual(values=c(0.3,0.3,0.3)) +
+  theme(axis.text.x = element_text(angle = 90), text=element_text(face="bold", size=20)) +
+  coord_flip() +
+  scale_y_discrete(expand = c(0, 10))
+
+right.plot <- ggplot(df.outliers3[grep("right",df.outliers3$hemi),], aes(color=diagnosis, y=proportion, x=region)) + 
+  geom_point(size = 6) +
+  ylim(0, 100) +
+  theme_minimal() +
+  scale_color_manual(values=c("Controls" =  "grey65" ,  "MCI" ="mediumturquoise", "AD"="lightslateblue")) +
+  scale_alpha_manual(values=c(0.3,0.3,0.3))+
+  theme(axis.text.x = element_text(angle = 90), text=element_text(face="bold", size=20)) +
+  coord_flip() +
+  scale_y_discrete(expand = c(0, 10))
+
+plot_grid(left.plot, right.plot, labels = "AUTO", nrow = 2)
+
+
+ggplot(df.outliers3[grep("left",df.outliers3$hemi),], aes(color=diagnosis, y=proportion, x=region)) + 
+  geom_point(size = 6) +
+  ylim(0, 100) +
+  theme_minimal() +
+  scale_color_manual(values=c("Controls" =  "grey65" ,  "MCI" ="mediumturquoise", "AD"="lightslateblue")) +
+  scale_alpha_manual(values=c(0.3,0.3,0.3)) +
+  theme(axis.text.x = element_text(angle = 90), text=element_text(face="bold", size=20))
+
+```
+# z-score proportional graphs
+##prepare data
+```{r}
+#selected wanted cols
+df_transformed <- df[-grep("_bin",names(df))]
+df_transformed <- df_transformed[grep("L_|R_|diagnosis",names(df_transformed))]
+
+#seperate into dignosis
+df_transformed_c<- df_transformed[grep("Controls", df_transformed$diagnosis), ] 
+df_transformed_m <- df_transformed[grep("MCI", df_transformed$diagnosis), ] 
+df_transformed_a <- df_transformed[grep("Dementia", df_transformed$diagnosis), ] 
+
+#stack on top of eachother! place col on col
+df_transformed_c <- cbind(df_transformed_c[1], stack(df_transformed_c[2:149])) 
+df_transformed_m <- cbind(df_transformed_m[1], stack(df_transformed_m[2:149]))
+df_transformed_a <- cbind(df_transformed_a[1], stack(df_transformed_a[2:149]))
+
+#bind on top of eachother
+df_transformed <- rbind(df_transformed_c,df_transformed_m,df_transformed_a)
+```
+#plot all
+```{r}
+ggplot(df_transformed, aes(color=diagnosis, y=values, x=ind)) + 
+  geom_point(size = 0.1) +
+    theme_minimal() +
+  scale_color_manual(values=c("Controls" =  "grey65" ,  "MCI" ="mediumturquoise", "AD"="lightslateblue")) +
+  scale_alpha_manual(values=c(0.3,0.3,0.3))
+```
+## plot AD
+```{r}
+left.plot <- ggplot(df_transformed_a[grep("L_",df_transformed_a$ind),], aes(y=values, x=ind)) + 
+  geom_point(colour = "lightslateblue", size = 0.1) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90)) +
+  labs(y="Z-score", x= "ROI")
+
+right.plot <- ggplot(df_transformed_a[grep("R_",df_transformed_a$ind),], aes(y=values, x=ind)) + 
+  geom_point(colour = "lightslateblue", size = 0.1) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90)) +
+  labs(y="Z-score", x= "ROI")
+
+plot_grid(left.plot, right.plot, labels = "AUTO", nrow = 2)
+```
