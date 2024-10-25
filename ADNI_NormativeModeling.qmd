@@ -9,7 +9,7 @@ format:
     self-contained: true
     is-particlejs-enabled: true
     code-summary: "Expand Code"
-    favicon: "https://raw.githubusercontent.com/adrian-a-medina/ADNI_NormativeModeling/main/Logo_Favicon.svg"
+    favicon: "Logo_Favicon.svg"
 author: Adrián Medina
 date: last-modified
 ---
@@ -427,7 +427,7 @@ ggpredict(s_1, c(terms = "age", "phenotype", "sex")) |>
   labs(title = "Average Cortical Thickness as a Function of Phenotype, Adjusted for Age and Sex",
        x = "Age",
        y = "Mean Cortical Thickness (mm)",
-       caption = "Note: 'phenotype' factors, 'HC' = Healthy Control; 'MCI' = Mild Cognitive Impairment; & 'AD' = Alzheimer's Disease.")
+       caption = "Note: 'phenotype' factors, 'HC' = Healthy Control; 'MCI' = Mild Cognitive Impairment; & 'AD' = Alzheimer's Dementia.")
 
 ```
 
@@ -631,7 +631,7 @@ cowplot::plot_grid(left_pvalues,right_pvalues, nrow = 2, labels = "AUTO")
 
 ```
 
-Conduct pairwise statistical comparisons between controls and Alzheimer's disease patients on cortical thickness measures. Perform t-tests on each brain region, followed by FDR corrections to adjust for multiple comparisons, organizing the results into a clean data frame with significance levels marked.
+Conduct pairwise statistical comparisons between controls and Alzheimer's dementia patients on cortical thickness measures. Perform t-tests on each brain region, followed by FDR corrections to adjust for multiple comparisons, organizing the results into a clean data frame with significance levels marked.
 
 ```{r Pairwise Comparisons in Control vs AD, message=FALSE, warning=FALSE}
 # Data frame preparation
@@ -755,7 +755,7 @@ ggplot(combined_stats_sig, aes(x = reorder(ROI, statistic), y = statistic, color
     x = "Region of Interest",
     y = "T-Statistic Value",
     color = "Comparison",
-    caption = "Note: 'HC' = Healthy Control; 'MCI' = Mild Cognitive Impairment; & 'AD' = Alzheimer's Disease.") +
+    caption = "Note: 'HC' = Healthy Control; 'MCI' = Mild Cognitive Impairment; & 'AD' = Alzheimer's Dementia") +
   theme_minimal() +
   theme(
     legend.position = "top",
@@ -950,9 +950,134 @@ ggplot(df, aes(x = phenotype, y = total_outlier_score, color = phenotype, fill =
 # Calculate descriptives of total outlier score grouped by phenotype group
 describeBy(df$total_outlier_score, df$phenotype, IQR = T)
 
-# Basic regression analysis with phenoype as predictor and total outlier score as outcome
+# Basic regression analysis with phenotype as predictor and total outlier score as outcome
 s1<- lm(total_outlier_score ~ phenotype, data = df)
 tab_model(s1, show.ci = 0.95, title = "Linear Model: Total Outlier Score as a Function of Phenotype")
+
+# Adjusted regression analysis with phenotype as predictor and total outlier score as outcome with age and sex covariates
+s2<-lm(total_outlier_score ~ phenotype + age + sex, data = df)
+anova(s2)
+tab_model(s2, show.ci = 0.95, title = "Adjusted Linear Model: Total Outlier Score as a Function of Phenotype, Adjusted for Age and Sex")
+
+# Plot multiple regression model
+ggpredict(s2, c(terms = "age", "phenotype", "sex")) |>
+  plot() +
+  labs(title = "Total Outlier Score as a Function of Phenotype, Adjusted for Age and Sex",
+       x = "Age",
+       y = "Total Outlier Score",
+       caption = "Note: 'phenotype' factors, 'MCI' = Mild Cognitive Impairment; & 'AD' = Alzheimer's Dementia")
+
+# Post-hoc test for multiple comparisons
+TukeyHSD(aov(s1))
+
+# Distribution analysis
+ggdensity(df$total_outlier_score, 
+          main = "distribution ",
+          xlab = "total outlier count")
+shapiro.test(df$total_outlier_score) # determines if a sample of data is normally distributed
+
+```
+
+```{r Counting Outliers in Groups, message=FALSE, warning=FALSE}
+# --------- MCI Sample ---------
+# Maximum number of outliers
+df %>% filter(phenotype == "MCI") %>%
+  select(contains("_bin")) %>%
+  colSums() %>%
+  max()
+
+# Maximum number of regions with outliers 
+z <- df %>% filter(phenotype == "MCI") %>%
+  select(contains("_bin")) %>%
+  colSums()
+length(which(z > 0))
+
+# --------- AD Sample ---------
+# Maximum number of outliers
+roi_with_most_outliers <- df %>% filter(phenotype == "AD") %>%
+  select(contains("_bin")) %>%
+  colSums() %>%
+  max()
+
+# Maximum number of regions with outliers 
+z <- df %>% filter(phenotype == "AD") %>%
+  select(contains("_bin")) %>%
+  colSums()
+length(which(z > 0))
+
+# Print number of ROIs with at least one outlier
+roi_with_at_least_one_outlier <- length(which(z > 0))
+roi_with_at_least_one_outlier
+rm(z)
+
+# Find mean and range for AD subjects
+d <- df %>% filter(phenotype == "AD") 
+median(d$total_outlier_score) # Calculate median number of outliers per AD subject
+range(d$total_outlier_score) # Calculate range of outliers per AD subject
+
+```
+
+```{r Proportional Analyses, message=FALSE, warning=FALSE}
+# Relative outlier count per phenotype group
+df.outliers <- as.data.frame(t(sapply(X = df[,grep("_bin", names(df), value = TRUE)], FUN = function(x) {
+  # Ensure x is a factor with both levels present
+  x_factor <- factor(x, levels = c(0, 1))
+  # Create table with phenotype, ensuring all levels of x_factor are used and NA values are ignored
+  tbl <- table(x_factor, df$phenotype, useNA = "no")
+  # Calculate proportions with respect to the phenotype groups
+  prop_table <- prop.table(tbl, margin = 2)
+  # Safely check if there are two rows and scale by 100 to convert to percentage, otherwise return NA
+  if (nrow(prop_table) >= 2) {
+    return(prop_table[2, ] * 100)  # Convert values to percentages
+  } else {
+    # Return NA or another suitable value if there aren't two rows
+    return(rep(NA, length(levels(df$phenotype))))
+  }
+})))
+
+# Download outlier data frame table as a CSV file
+df.outlierstable <- df.outliers
+df.outlierstable <- tibble::rownames_to_column(df.outlierstable, "ROI")
+df.outlierstable$ROI <- gsub("_bin", "", df.outlierstable$ROI) #remove the unwanted "_bin"
+df.outlierstable$ROI <- gsub("_", " ", df.outlierstable$ROI) #remove the unwanted "_"
+write.csv (df.outlierstable, '/Users/adrianmedina/GitHub/ADNI_NormativeModeling/data_files/outlier_table.csv')
+rm(df.outlierstable)
+
+# Differences of outliers in each group (using ANOVA)
+df.stats <- as.data.frame(sapply(X = df[,grep("_bin", names(df),value = T)], FUN = function(x) summary(aov(x ~ df$phenotype))[[1]][["Pr(>F)"]][1]))
+names(df.stats) <- "p_value"
+setDT(df.stats, keep.rownames = "ROI")
+
+# FDR correction
+df.stats <- cbind(df.stats, p.adjust(df.stats$p_value), method = "fdr")
+names(df.stats)[3] <- "FDR.pvalue"
+
+# Extracting F-statistic values
+df.f_stats <- as.data.frame(sapply(X = df[,grep("_bin", names(df),value = T)], FUN = function(x) summary(aov(x ~ df$phenotype))[[1]][["F value"]][1]))
+names(df.f_stats) <- "f_stat"
+setDT(df.f_stats, keep.rownames = "ROI")
+
+# ROIs significant post FDR correction
+df.stats[which(df.stats$FDR.pvalue <0.05),]
+
+# Plots for both hemispheres separately, values are 1-p_value, so higher bars are more significant
+left.stat.plot <- ggplot(df.stats[grep("L_", df.stats$ROI),], aes(x=ROI, y=1-p_value)) + 
+  geom_bar(stat="identity", fill="firebrick") + 
+  geom_hline(yintercept = 0.95, linetype = "dashed", color = "black") + # Adding significance line
+  theme_cowplot() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+right.stat.plot <- ggplot(df.stats[grep("R_", df.stats$ROI),], aes(x=ROI, y=1-p_value)) + 
+  geom_bar(stat="identity", fill="dodgerblue") + 
+  geom_hline(yintercept = 0.95, linetype = "dashed", color = "black") + # Adding significance line
+  theme_cowplot() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+cowplot::plot_grid(left.stat.plot, right.stat.plot, labels = "AUTO", nrow = 2)
+
+```
+
+```{r Proportional Analyses, message=FALSE, warning=FALSE}
 
 ```
 
@@ -1242,6 +1367,16 @@ cowplot::plot_grid(left_pvalues, right_pvalues, nrow = 2)
 
 To enhance **reproducibility**, details about the **working environment** used for these analyses can be found below.
 
+<button type="button" data-bs-toggle="collapse" data-bs-target="#collapseOne">
+
+Session Information </button>
+
+::: {#collapseOne .accordion-collapse .collapse}
+<div>
+
 ```{r}
 sessionInfo()
 ```
+
+</div>
+:::
