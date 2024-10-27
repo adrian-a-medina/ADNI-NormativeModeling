@@ -9,7 +9,9 @@ format:
     self-contained: true
     is-particlejs-enabled: true
     code-summary: "Expand Code"
-    favicon: "Logo_Favicon.svg"
+include-in-header:
+  - text: |
+     <link rel = "shortcut icon" href = "Logo_Favicon.svg" />
 author: Adrián Medina
 date: last-modified
 ---
@@ -84,7 +86,7 @@ p_load(dplyr, knitr, kableExtra, psych, tidyr, readr, stringr, matrixStats, ggse
        lavaan, caTools, bitops, effects, ggeffects, reshape2, ggpubr)
 
 # Specify the 'base_path' where you can find your data files, ASSUMING they're in the same directory, & set it as WD
-base_path <- "~/GitHub/ADNI_NormativeModeling/data_files"
+base_path <- "~/GitHub/ADNI-NormativeModeling/data_files/"
 setwd(base_path)
 
 # Read in foundational data set
@@ -121,8 +123,6 @@ The `ggseg` package adds an extra 'e' in the spelling of the name Destrieux, so 
 :::
 
 ```{r Preparing the Destrieux Atlas ROI Variables, message=FALSE, warning=FALSE}
-setwd(base_path)
-
 # Assign atlas data to data frames in local environment
 desterieux_dims <- desterieux$data
 desterieux <- desterieux
@@ -1040,7 +1040,7 @@ df.outlierstable <- df.outliers
 df.outlierstable <- tibble::rownames_to_column(df.outlierstable, "ROI")
 df.outlierstable$ROI <- gsub("_bin", "", df.outlierstable$ROI) #remove the unwanted "_bin"
 df.outlierstable$ROI <- gsub("_", " ", df.outlierstable$ROI) #remove the unwanted "_"
-write.csv (df.outlierstable, '/Users/adrianmedina/GitHub/ADNI_NormativeModeling/data_files/outlier_table.csv')
+write.csv (df.outlierstable, '/Users/adrianmedina/GitHub/ADNI-NormativeModeling/data_files/outlier_table.csv')
 rm(df.outlierstable)
 
 # Differences of outliers in each group (using ANOVA)
@@ -1074,10 +1074,6 @@ right.stat.plot <- ggplot(df.stats[grep("R_", df.stats$ROI),], aes(x=ROI, y=1-p_
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
 
 cowplot::plot_grid(left.stat.plot, right.stat.plot, labels = "AUTO", nrow = 2)
-
-```
-
-```{r Proportional Analyses, message=FALSE, warning=FALSE}
 
 ```
 
@@ -1354,10 +1350,6 @@ right_pvalues <- right_pvalues + labs(title = "ADNI vs PDC ANOVA Results")
 
 # Combine plots for a comprehensive view
 cowplot::plot_grid(left_pvalues, right_pvalues, nrow = 2)
-
-```
-
-```{r}
 
 ```
 
